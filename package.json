@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "frontend:dev": "npm --prefix frontend run dev",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

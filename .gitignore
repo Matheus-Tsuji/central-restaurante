@@ -1,9 +1,12 @@
 node_modules/
 dist/
+frontend/node_modules/
+frontend/dist/
 .idea/
 .vscode/
 *.log
 .env
 database.sqlite*
 *.sqlite
+
 
