@@ -6,6 +6,7 @@
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
+    "reset-db": "tsx src/resetDb.ts",
     "frontend:dev": "npm --prefix frontend run dev",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
