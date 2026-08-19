@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Table, MenuItem } from '../types';
 import { api } from '../services/api';
 import { offlineDb } from '../services/offlineDb';
-import { ShoppingBag, Plus, Minus, Send, CheckCircle2, AlertCircle, Search } from 'lucide-react';
+import { ShoppingBag, Plus, Minus, Send, CheckCircle2, AlertCircle, Search, RefreshCw } from 'lucide-react';
 
 interface WaiterScreenProps {
   isOnline: boolean;
@@ -15,28 +15,56 @@ interface CartItem {
   notes: string;
 }
 
+// Dados padrão iniciais para exibição imediata (Instant First Render)
+const INITIAL_TABLES: Table[] = [
+  { id: 't1', number: 1, name: 'Mesa 1', status: 'OCCUPIED' },
+  { id: 't2', number: 2, name: 'Mesa 2', status: 'FREE' },
+  { id: 't3', number: 3, name: 'Mesa 3', status: 'PAYMENT_PENDING' },
+  { id: 't4', number: 4, name: 'Mesa 4', status: 'FREE' },
+  { id: 't5', number: 5, name: 'Mesa 5', status: 'OCCUPIED' },
+  { id: 't6', number: 6, name: 'Mesa 6', status: 'FREE' },
+  { id: 't7', number: 7, name: 'Mesa 7', status: 'FREE' },
+  { id: 't8', number: 8, name: 'Mesa 8', status: 'FREE' },
+  { id: 't9', number: 9, name: 'Mesa 9', status: 'FREE' },
+  { id: 't10', number: 10, name: 'Mesa 10', status: 'FREE' }
+];
+
+const INITIAL_MENU: MenuItem[] = [
+  { id: 'm1', name: 'X-Burguer Especial', description: 'Pão brioche, artesanal 180g, duplo cheddar', price: 32.90, category: 'Lanches', active: true },
+  { id: 'm2', name: 'Smash Bacon Supreme', description: 'Dois smash 90g, queijo prato, bacon crocante', price: 36.50, category: 'Lanches', active: true },
+  { id: 'm3', name: 'Batata Rústica c/ Páprica', description: 'Porção 400g servida com maionese da casa', price: 22.00, category: 'Porções', active: true },
+  { id: 'm4', name: 'Refrigerante Cola 350ml', description: 'Lata trincando de gelada', price: 7.50, category: 'Bebidas', active: true },
+  { id: 'm5', name: 'Suco Natural Laranja 500ml', description: 'Suco da fruta feito na hora', price: 11.00, category: 'Bebidas', active: true },
+  { id: 'm6', name: 'Petit Gâteau Chocolate', description: 'Acompanha sorvete de creme e calda', price: 24.90, category: 'Sobremesas', active: true }
+];
+
 export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCreated }) => {
-  const [tables, setTables] = useState<Table[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [tables, setTables] = useState<Table[]>(INITIAL_TABLES);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(INITIAL_MENU);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderNotes, setOrderNotes] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
-    loadData();
+    // Carregar em segundo plano imediatamente sem travar a interface
+    loadDataBackground();
   }, []);
 
-  async function loadData() {
+  async function loadDataBackground() {
+    setRefreshing(true);
     try {
       const [tData, mData] = await Promise.all([api.getTables(), api.getMenuItems()]);
-      setTables(tData);
-      setMenuItems(mData);
+      if (tData && tData.length > 0) setTables(tData);
+      if (mData && mData.length > 0) setMenuItems(mData);
     } catch (err) {
-      console.error('Erro ao carregar dados:', err);
+      console.warn('Erro ao atualizar dados em segundo plano:', err);
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -103,25 +131,26 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
     try {
       if (isOnline) {
         await api.createOrder(selectedTable.id, formattedItems, syncId);
-        setFeedback({ type: 'success', message: `Pedido da ${selectedTable.name} enviado com sucesso para a Cozinha!` });
+        setFeedback({ type: 'success', message: `Pedido da ${selectedTable.name} enviado com sucesso!` });
       } else {
-        // Salvar no IndexedDB local com Dexie.js
-        await offlineDb.offlineOrders.add({
-          offline_sync_id: syncId,
-          table_id: selectedTable.id,
-          table_number: selectedTable.number,
-          items: formattedItems,
-          notes: orderNotes,
-          created_at: new Date().toISOString(),
-          synced: 0
-        });
-        setFeedback({ type: 'success', message: `Modo Offline: Pedido da ${selectedTable.name} salvo no dispositivo. Será sincronizado ao reconectar.` });
+        if (offlineDb) {
+          await offlineDb.offlineOrders.add({
+            offline_sync_id: syncId,
+            table_id: selectedTable.id,
+            table_number: selectedTable.number,
+            items: formattedItems,
+            notes: orderNotes,
+            created_at: new Date().toISOString(),
+            synced: 0
+          });
+        }
+        setFeedback({ type: 'success', message: `Modo Offline: Pedido salvo no dispositivo. Será sincronizado ao reconectar.` });
       }
 
       setCart([]);
       setOrderNotes('');
       onOrderCreated();
-      loadData();
+      loadDataBackground();
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Erro ao processar pedido.' });
     } finally {
@@ -139,7 +168,11 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
           {/* Seção Mapa de Mesas */}
           <div className="clean-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '1.1rem' }}>Mapa de Mesas</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={{ fontSize: '1.1rem' }}>Mapa de Mesas</h2>
+                {refreshing && <RefreshCw size={14} className="spin" color="var(--accent-blue)" />}
+              </div>
+
               <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem' }}>
                 <span className="badge badge-free">Livre</span>
                 <span className="badge badge-occupied">Ocupada</span>

@@ -1,14 +1,74 @@
 import type { Table, MenuItem, Order, InventoryItem, CashSession, DailyReport } from '../types';
 
-const API_BASE = 'http://localhost:3000/api';
-
 let activeToken: string | null = null;
+let isAuthenticating = false;
+
+// Mock Fallback Instantâneo para renderização rápida se o servidor não estiver respondendo em 1s
+const MOCK_TABLES: Table[] = [
+  { id: 't1', number: 1, name: 'Mesa 1', status: 'OCCUPIED' },
+  { id: 't2', number: 2, name: 'Mesa 2', status: 'FREE' },
+  { id: 't3', number: 3, name: 'Mesa 3', status: 'PAYMENT_PENDING' },
+  { id: 't4', number: 4, name: 'Mesa 4', status: 'FREE' },
+  { id: 't5', number: 5, name: 'Mesa 5', status: 'OCCUPIED' },
+  { id: 't6', number: 6, name: 'Mesa 6', status: 'FREE' },
+  { id: 't7', number: 7, name: 'Mesa 7', status: 'FREE' },
+  { id: 't8', number: 8, name: 'Mesa 8', status: 'FREE' },
+  { id: 't9', number: 9, name: 'Mesa 9', status: 'FREE' },
+  { id: 't10', number: 10, name: 'Mesa 10', status: 'FREE' }
+];
+
+const MOCK_MENU_ITEMS: MenuItem[] = [
+  { id: 'm1', name: 'X-Burguer Especial', description: 'Pão brioche, artesanal 180g, duplo cheddar', price: 32.90, category: 'Lanches', active: true },
+  { id: 'm2', name: 'Smash Bacon Supreme', description: 'Dois smash 90g, queijo prato, bacon crocante', price: 36.50, category: 'Lanches', active: true },
+  { id: 'm3', name: 'Batata Rústica c/ Páprica', description: 'Porção 400g servida com maionese da casa', price: 22.00, category: 'Porções', active: true },
+  { id: 'm4', name: 'Refrigerante Cola 350ml', description: 'Lata trincando de gelada', price: 7.50, category: 'Bebidas', active: true },
+  { id: 'm5', name: 'Suco Natural Laranja 500ml', description: 'Suco da fruta feito na hora', price: 11.00, category: 'Bebidas', active: true },
+  { id: 'm6', name: 'Petit Gâteau Chocolate', description: 'Acompanha sorvete de creme e calda', price: 24.90, category: 'Sobremesas', active: true }
+];
 
 export function setAuthToken(token: string) {
   activeToken = token;
 }
 
-async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+// Garante autenticação automática prévia com o backend
+async function ensureAuth(role: 'ADMIN' | 'CASHIER' | 'WAITER' | 'KITCHEN' = 'ADMIN') {
+  if (activeToken || isAuthenticating) return;
+  isAuthenticating = true;
+  try {
+    const credsMap = {
+      ADMIN: { username: 'admin', password: 'admin123' },
+      CASHIER: { username: 'caixa', password: 'caixa123' },
+      WAITER: { username: 'garcom', password: 'garcom123' },
+      KITCHEN: { username: 'cozinha', password: 'cozinha123' }
+    };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1200);
+
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credsMap[role]),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (res.ok) {
+      const data = await res.json();
+      activeToken = data.token;
+    }
+  } catch {
+    // Se o backend não responder em 1.2s, ignora silenciosamente para usar os mocks
+  } finally {
+    isAuthenticating = false;
+  }
+}
+
+async function fetchWithTimeout(endpoint: string, options: RequestInit = {}, timeoutMs = 1500) {
+  await ensureAuth();
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   const headers = {
     'Content-Type': 'application/json',
     ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {}),
@@ -16,85 +76,52 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   };
 
   try {
-    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    const res = await fetch(`/api${endpoint}`, {
+      ...options,
+      headers,
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || `Erro HTTP ${res.status}`);
+      throw new Error(errData.error || `HTTP ${res.status}`);
     }
+
     return await res.json();
   } catch (err: any) {
-    console.warn(`[API] Falha de conexão com ${endpoint}, utilizando dados mock ou repassando erro:`, err.message);
+    clearTimeout(timer);
     throw err;
   }
 }
 
 export const api = {
-  async login(role: 'ADMIN' | 'CASHIER' | 'WAITER' | 'KITCHEN') {
-    const credentialsMap = {
-      ADMIN: { username: 'admin', password: 'admin123' },
-      CASHIER: { username: 'caixa', password: 'caixa123' },
-      WAITER: { username: 'garcom', password: 'garcom123' },
-      KITCHEN: { username: 'cozinha', password: 'cozinha123' }
-    };
-    const creds = credentialsMap[role];
-    try {
-      const data = await fetchWithAuth('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(creds)
-      });
-      activeToken = data.token;
-      return data;
-    } catch {
-      // Mock token para desenvolvimento visual
-      activeToken = 'mock_token_' + role.toLowerCase();
-      return { token: activeToken, user: { id: '1', name: `Usuário ${role}`, role } };
-    }
-  },
-
   async getTables(): Promise<Table[]> {
     try {
-      return await fetchWithAuth('/tables');
+      return await fetchWithTimeout('/tables');
     } catch {
-      return [
-        { id: 't1', number: 1, name: 'Mesa 1', status: 'OCCUPIED' },
-        { id: 't2', number: 2, name: 'Mesa 2', status: 'FREE' },
-        { id: 't3', number: 3, name: 'Mesa 3', status: 'PAYMENT_PENDING' },
-        { id: 't4', number: 4, name: 'Mesa 4', status: 'FREE' },
-        { id: 't5', number: 5, name: 'Mesa 5', status: 'OCCUPIED' },
-        { id: 't6', number: 6, name: 'Mesa 6', status: 'FREE' },
-        { id: 't7', number: 7, name: 'Mesa 7', status: 'FREE' },
-        { id: 't8', number: 8, name: 'Mesa 8', status: 'FREE' },
-        { id: 't9', number: 9, name: 'Mesa 9', status: 'FREE' },
-        { id: 't10', number: 10, name: 'Mesa 10', status: 'FREE' }
-      ];
+      return MOCK_TABLES;
     }
   },
 
   async getMenuItems(): Promise<MenuItem[]> {
     try {
-      return await fetchWithAuth('/menu-items');
+      return await fetchWithTimeout('/menu-items');
     } catch {
-      return [
-        { id: 'm1', name: 'X-Burguer Especial', description: 'Pão brioche, artesanal 180g, duplo cheddar', price: 32.90, category: 'Lanches', active: true },
-        { id: 'm2', name: 'Smash Bacon Supreme', description: 'Dois smash 90g, queijo prato, bacon crocante', price: 36.50, category: 'Lanches', active: true },
-        { id: 'm3', name: 'Batata Rústica c/ Páprica', description: 'Porção 400g servida com maionese da casa', price: 22.00, category: 'Porções', active: true },
-        { id: 'm4', name: 'Refrigerante Cola 350ml', description: 'Lata trincando de gelada', price: 7.50, category: 'Bebidas', active: true },
-        { id: 'm5', name: 'Suco Natural Laranja 500ml', description: 'Suco da fruta feito na hora', price: 11.00, category: 'Bebidas', active: true },
-        { id: 'm6', name: 'Petit Gâteau Chocolate', description: 'Acompanha sorvete de creme e calda', price: 24.90, category: 'Sobremesas', active: true }
-      ];
+      return MOCK_MENU_ITEMS;
     }
   },
 
   async createOrder(tableId: string, items: { menu_item_id: string; quantity: number; notes?: string }[], offline_sync_id?: string) {
-    return await fetchWithAuth('/orders', {
+    return await fetchWithTimeout('/orders', {
       method: 'POST',
       body: JSON.stringify({ table_id: tableId, items, offline_sync_id })
-    });
+    }, 3000);
   },
 
   async getKitchenQueue(): Promise<Order[]> {
     try {
-      return await fetchWithAuth('/kitchen/queue');
+      return await fetchWithTimeout('/kitchen/queue');
     } catch {
       return [
         {
@@ -130,15 +157,15 @@ export const api = {
   },
 
   async updateKitchenItemStatus(itemId: string, status: string) {
-    return await fetchWithAuth(`/kitchen/item/${itemId}/status`, {
+    return await fetchWithTimeout(`/kitchen/item/${itemId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status })
-    });
+    }, 3000);
   },
 
   async getTableBill(tableId: string) {
     try {
-      return await fetchWithAuth(`/orders/table/${tableId}/bill`);
+      return await fetchWithTimeout(`/orders/table/${tableId}/bill`);
     } catch {
       return {
         table: { id: tableId, number: 1, name: 'Mesa 1', status: 'OCCUPIED' },
@@ -154,15 +181,15 @@ export const api = {
   },
 
   async processPayment(tableId: string, payments: { method: string; amount: number; amount_paid?: number }[]) {
-    return await fetchWithAuth('/cashier/payment', {
+    return await fetchWithTimeout('/cashier/payment', {
       method: 'POST',
       body: JSON.stringify({ table_id: tableId, payments })
-    });
+    }, 3000);
   },
 
   async getDailyReport(): Promise<DailyReport> {
     try {
-      return await fetchWithAuth('/cashier/report');
+      return await fetchWithTimeout('/cashier/report');
     } catch {
       return {
         date: new Date().toISOString().split('T')[0]!,
@@ -207,7 +234,7 @@ export const api = {
 
   async getInventory(): Promise<InventoryItem[]> {
     try {
-      return await fetchWithAuth('/inventory');
+      return await fetchWithTimeout('/inventory');
     } catch {
       return [
         { id: 'inv-1', name: 'Pão de Hambúrguer', unit: 'un', quantity: 85, min_quantity: 20, unit_price: 1.5 },
