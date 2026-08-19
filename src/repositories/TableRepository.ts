@@ -7,7 +7,16 @@ export class TableRepository {
   }
 
   static findById(id: string): Table | null {
-    const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(id) as Table | undefined;
+    let table = db.prepare('SELECT * FROM tables WHERE id = ?').get(id) as Table | undefined;
+
+    // Fallback gracioso para IDs t1..t10
+    if (!table && id.startsWith('t')) {
+      const num = parseInt(id.replace('t', ''), 10);
+      if (!isNaN(num)) {
+        table = this.findByNumber(num) || undefined;
+      }
+    }
+
     return table || null;
   }
 
@@ -17,13 +26,16 @@ export class TableRepository {
   }
 
   static updateStatus(id: string, status: TableStatus): Table | null {
+    const table = this.findById(id);
+    if (!table) return null;
+
     db.prepare(`
       UPDATE tables 
       SET status = ?, updated_at = datetime('now', 'localtime')
       WHERE id = ?
-    `).run(status, id);
+    `).run(status, table.id);
 
-    return this.findById(id);
+    return this.findById(table.id);
   }
 
   static create(table: Omit<Table, 'created_at' | 'updated_at'>): Table {

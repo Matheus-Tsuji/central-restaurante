@@ -21,7 +21,18 @@ export class MenuItemRepository {
   }
 
   static findById(id: string): MenuItem | null {
-    const item = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id) as MenuItem | undefined;
+    let item = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id) as MenuItem | undefined;
+
+    // Fallback gracioso para IDs m1, m2, m3, m4, m5, m6 se o item for procurado por ID alternativo ou nome
+    if (!item && id.startsWith('m')) {
+      const allItems = this.findAll();
+      const indexMap: Record<string, number> = { 'm1': 0, 'm2': 1, 'm3': 2, 'm4': 3, 'm5': 4, 'm6': 5 };
+      const idx = indexMap[id];
+      if (idx !== undefined && allItems[idx]) {
+        item = allItems[idx];
+      }
+    }
+
     if (!item) return null;
 
     const ingredients = db.prepare(`

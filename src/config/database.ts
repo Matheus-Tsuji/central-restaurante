@@ -137,10 +137,10 @@ function seedDefaultData(): void {
       'INSERT INTO users (id, name, username, role, password_hash) VALUES (?, ?, ?, ?, ?)'
     );
 
-    insertUser.run(randomUUID(), 'Administrador Central', 'admin', 'ADMIN', hashPassword('admin123'));
-    insertUser.run(randomUUID(), 'Caixa Principal', 'caixa', 'CASHIER', hashPassword('caixa123'));
-    insertUser.run(randomUUID(), 'Garçom João', 'garcom', 'WAITER', hashPassword('garcom123'));
-    insertUser.run(randomUUID(), 'Cozinha Chefe', 'cozinha', 'KITCHEN', hashPassword('cozinha123'));
+    insertUser.run('u_admin', 'Administrador Central', 'admin', 'ADMIN', hashPassword('admin123'));
+    insertUser.run('u_caixa', 'Caixa Principal', 'caixa', 'CASHIER', hashPassword('caixa123'));
+    insertUser.run('u_garcom', 'Garçom João', 'garcom', 'WAITER', hashPassword('garcom123'));
+    insertUser.run('u_cozinha', 'Cozinha Chefe', 'cozinha', 'KITCHEN', hashPassword('cozinha123'));
     console.log('✅ Usuários iniciais cadastrados (admin, caixa, garcom, cozinha).');
   }
 
@@ -149,46 +149,58 @@ function seedDefaultData(): void {
   if (tableCount === 0) {
     const insertTable = db.prepare('INSERT INTO tables (id, number, name) VALUES (?, ?, ?)');
     for (let i = 1; i <= 10; i++) {
-      insertTable.run(randomUUID(), i, `Mesa ${i}`);
+      insertTable.run(`t${i}`, i, `Mesa ${i}`);
     }
     console.log('✅ 10 mesas iniciais criadas.');
   }
 
-  // Seed Estoque se não existir
+  // Seed Estoque e Cardápio com IDs fixos m1..m6 para alinhamento total com o frontend
   const inventoryCount = (db.prepare('SELECT COUNT(*) as count FROM inventory').get() as { count: number }).count;
   if (inventoryCount === 0) {
     const insertInv = db.prepare(
       'INSERT INTO inventory (id, name, unit, quantity, min_quantity, unit_price) VALUES (?, ?, ?, ?, ?, ?)'
     );
-    const pãoId = randomUUID();
-    const carneId = randomUUID();
-    const queijoId = randomUUID();
-    const refriId = randomUUID();
+    const pãoId = 'inv-pao';
+    const carneId = 'inv-carne';
+    const queijoId = 'inv-queijo';
+    const refriId = 'inv-refri';
+    const batataId = 'inv-batata';
+    const sorveteId = 'inv-sorvete';
 
     insertInv.run(pãoId, 'Pão de Hambúrguer', 'un', 100, 20, 1.5);
     insertInv.run(carneId, 'Hambúrguer 180g', 'un', 50, 10, 8.0);
     insertInv.run(queijoId, 'Fatia de Queijo Cheddar', 'un', 200, 30, 0.8);
     insertInv.run(refriId, 'Lata Refrigerante 350ml', 'un', 120, 24, 3.5);
+    insertInv.run(batataId, 'Batata Porção', 'g', 5000, 1000, 0.02);
+    insertInv.run(sorveteId, 'Sorvete Creme', 'g', 3000, 500, 0.05);
 
-    // Seed Cardápio
+    // Seed Cardápio com IDs m1..m6 correspondentes ao frontend
     const insertMenu = db.prepare(
       'INSERT INTO menu_items (id, name, description, price, category) VALUES (?, ?, ?, ?, ?)'
     );
-    const burgerId = randomUUID();
-    const refriMenuId = randomUUID();
 
-    insertMenu.run(burgerId, 'X-Burguer Especial', 'Pão brioche, artesanal 180g, duplo cheddar', 32.90, 'Lanches');
-    insertMenu.run(refriMenuId, 'Refrigerante Cola 350ml', 'Gelado com gelo e limão', 7.50, 'Bebidas');
+    insertMenu.run('m1', 'X-Burguer Especial', 'Pão brioche, artesanal 180g, duplo cheddar', 32.90, 'Lanches');
+    insertMenu.run('m2', 'Smash Bacon Supreme', 'Dois smash 90g, queijo prato, bacon crocante', 36.50, 'Lanches');
+    insertMenu.run('m3', 'Batata Rústica c/ Páprica', 'Porção 400g servida com maionese da casa', 22.00, 'Porções');
+    insertMenu.run('m4', 'Refrigerante Cola 350ml', 'Lata trincando de gelada', 7.50, 'Bebidas');
+    insertMenu.run('m5', 'Suco Natural Laranja 500ml', 'Suco da fruta feito na hora', 11.00, 'Bebidas');
+    insertMenu.run('m6', 'Petit Gâteau Chocolate', 'Acompanha sorvete de creme e calda', 24.90, 'Sobremesas');
 
-    // Fazer a ligação dos ingredientes do X-Burguer com o estoque
+    // Ficha técnica dos pratos
     const insertIng = db.prepare(
       'INSERT INTO menu_item_ingredients (id, menu_item_id, inventory_id, quantity_required) VALUES (?, ?, ?, ?)'
     );
-    insertIng.run(randomUUID(), burgerId, pãoId, 1);
-    insertIng.run(randomUUID(), burgerId, carneId, 1);
-    insertIng.run(randomUUID(), burgerId, queijoId, 2);
-    insertIng.run(randomUUID(), refriMenuId, refriId, 1);
+    insertIng.run(randomUUID(), 'm1', pãoId, 1);
+    insertIng.run(randomUUID(), 'm1', carneId, 1);
+    insertIng.run(randomUUID(), 'm1', queijoId, 2);
+    
+    insertIng.run(randomUUID(), 'm2', pãoId, 1);
+    insertIng.run(randomUUID(), 'm2', carneId, 2);
+    
+    insertIng.run(randomUUID(), 'm3', batataId, 400);
+    insertIng.run(randomUUID(), 'm4', refriId, 1);
+    insertIng.run(randomUUID(), 'm6', sorveteId, 100);
 
-    console.log('✅ Estoque e Cardápio com Ficha Técnica inicial criados.');
+    console.log('✅ Estoque e Cardápio m1..m6 com Ficha Técnica inicial criados.');
   }
 }
