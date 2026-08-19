@@ -2,46 +2,50 @@ import React, { useState, useEffect } from 'react';
 import type { Order } from '../types';
 import { api } from '../services/api';
 import { socket } from '../services/socket';
-import { Clock, CheckCircle2, Play, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle2, Play, AlertCircle, ChefHat, GlassWater } from 'lucide-react';
 
-export const KitchenScreen: React.FC = () => {
+interface KitchenScreenProps {
+  type?: 'FOOD' | 'BAR';
+}
+
+export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    loadKitchenQueue();
+  const isBar = type === 'BAR';
 
-    // Escutar eventos Socket.IO em tempo real
-    socket.on('order:created', (newOrder: Order) => {
-      console.log('🍳 Novo pedido recebido via Socket.IO na Cozinha:', newOrder);
-      loadKitchenQueue();
+  useEffect(() => {
+    loadQueue();
+
+    socket.on('order:created', () => {
+      loadQueue();
     });
 
     socket.on('order:status_changed', () => {
-      loadKitchenQueue();
+      loadQueue();
     });
 
     return () => {
       socket.off('order:created');
       socket.off('order:status_changed');
     };
-  }, []);
+  }, [type]);
 
-  async function loadKitchenQueue() {
+  async function loadQueue() {
     try {
-      const data = await api.getKitchenQueue();
+      const data = isBar ? await api.getBarQueue() : await api.getKitchenQueue();
       setOrders(data);
     } catch (err) {
-      console.error('Erro ao carregar fila da cozinha:', err);
+      console.error(`Erro ao carregar fila (${type}):`, err);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleUpdateItemStatus(itemId: string, newStatus: string) {
+  async function handleBatchUpdateStatus(orderId: string, newStatus: 'PREPARING' | 'READY') {
     try {
-      await api.updateKitchenItemStatus(itemId, newStatus);
-      loadKitchenQueue();
+      await api.updateOrderBatchStatus(orderId, newStatus, type);
+      loadQueue();
     } catch (err: any) {
       alert(`Erro ao atualizar status: ${err.message}`);
     }
@@ -57,95 +61,97 @@ export const KitchenScreen: React.FC = () => {
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
-          <h1 style={{ fontSize: '1.4rem' }}>Painel da Cozinha (KDS)</h1>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Gerenciador de comandas e tempo de preparo dos pratos em tempo real
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {isBar ? <GlassWater size={28} color="#0284C7" /> : <ChefHat size={28} color="var(--accent-emerald)" />}
+            <h1 style={{ fontSize: '1.4rem' }}>
+              {isBar ? 'Painel do Bar (Bebidas)' : 'Painel da Cozinha (KDS Pratos)'}
+            </h1>
+          </div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            {isBar
+              ? 'Gerenciamento exclusivo de drinks, sucos e bebidas em tempo real'
+              : 'Gerenciamento exclusivo de lanches, porções e pratos em tempo real'}
           </p>
         </div>
 
         <div className="badge badge-free" style={{ padding: '8px 14px', fontSize: '0.8rem' }}>
-          <Clock size={14} /> Atualização via WebSocket Ativa
+          <Clock size={14} /> Atualização em Tempo Real Ativa
         </div>
       </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
-          Carregando comandas da cozinha...
+          Carregando comandas de {isBar ? 'bebidas' : 'pratos'}...
         </div>
       ) : orders.length === 0 ? (
         <div className="clean-card" style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
           <CheckCircle2 size={48} color="var(--accent-emerald)" style={{ marginBottom: '12px' }} />
-          <h3>Nenhum pedido pendente na cozinha!</h3>
-          <p style={{ fontSize: '0.85rem' }}>Todos os pratos foram preparados e entregues.</p>
+          <h3>Nenhum pedido pendente no {isBar ? 'Bar' : 'KDS da Cozinha'}!</h3>
+          <p style={{ fontSize: '0.85rem' }}>
+            {isBar ? 'Todas as bebidas foram preparadas.' : 'Todos os pratos foram preparados e entregues.'}
+          </p>
         </div>
       ) : (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
           gap: '20px'
         }}>
-          {orders.map(order => (
-            <div
-              key={order.id}
-              className="clean-card animate-fade-in"
-              style={{
-                padding: '18px',
-                borderLeft: '5px solid var(--accent-blue)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: '16px'
-              }}
-            >
-              <div>
-                {/* Header do Card */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-light)', paddingBottom: '10px', marginBottom: '12px' }}>
-                  <div>
-                    <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                      Mesa {order.table_number || order.table_id}
-                    </span>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      Atendido por: {order.waiter_name || 'Garçom'}
+          {orders.map(order => {
+            // Verificar status predominante do pedido para o botão único
+            const anyPending = order.items?.some(i => i.status === 'PENDING');
+            const allPreparingOrReady = order.items?.every(i => i.status === 'PREPARING' || i.status === 'READY');
+            const isPreparing = !anyPending && order.items?.some(i => i.status === 'PREPARING');
+
+            return (
+              <div
+                key={order.id}
+                className="clean-card animate-fade-in"
+                style={{
+                  padding: '18px',
+                  borderLeft: `5px solid ${isBar ? '#0284C7' : 'var(--accent-emerald)'}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: '16px'
+                }}
+              >
+                <div>
+                  {/* Header do Card */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-light)', paddingBottom: '10px', marginBottom: '12px' }}>
+                    <div>
+                      <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        Mesa {order.table_number || order.table_id}
+                      </span>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        Atendido por: {order.waiter_name || 'Garçom'}
+                      </div>
                     </div>
+
+                    <span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>
+                      <Clock size={12} /> {getTimeElapsed(order.created_at)}
+                    </span>
                   </div>
 
-                  <span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>
-                    <Clock size={12} /> {getTimeElapsed(order.created_at)}
-                  </span>
-                </div>
-
-                {/* Lista de Itens do Pedido */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {order.items?.map(item => {
-                    let statusColor = '#94A3B8';
-                    let statusBg = 'var(--bg-subtle)';
-
-                    if (item.status === 'PREPARING') {
-                      statusColor = 'var(--accent-blue)';
-                      statusBg = 'var(--accent-blue-light)';
-                    } else if (item.status === 'READY') {
-                      statusColor = 'var(--accent-emerald)';
-                      statusBg = 'var(--accent-emerald-light)';
-                    }
-
-                    return (
+                  {/* Lista de Itens do Pedido */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                    {order.items?.map(item => (
                       <div
                         key={item.id}
                         style={{
-                          padding: '10px 12px',
+                          padding: '8px 10px',
                           borderRadius: 'var(--radius-sm)',
-                          background: statusBg,
+                          background: item.status === 'PREPARING' ? (isBar ? '#E0F2FE' : 'var(--accent-emerald-light)') : 'var(--bg-subtle)',
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: '6px'
+                          gap: '4px'
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                            {item.quantity}x {item.menu_item_name || 'Prato'}
+                            {item.quantity}x {item.menu_item_name || 'Item'}
                           </span>
-
-                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: statusColor }}>
+                          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: item.status === 'PREPARING' ? 'var(--accent-blue)' : 'var(--text-secondary)' }}>
                             {item.status === 'PENDING' ? 'PENDENTE' : item.status === 'PREPARING' ? 'EM PREPARO' : 'PRONTO'}
                           </span>
                         </div>
@@ -155,37 +161,41 @@ export const KitchenScreen: React.FC = () => {
                             <AlertCircle size={12} /> Obs: {item.notes}
                           </div>
                         )}
-
-                        {/* Botão Ação por Item */}
-                        <div style={{ marginTop: '4px', display: 'flex', gap: '6px' }}>
-                          {item.status === 'PENDING' && (
-                            <button
-                              onClick={() => handleUpdateItemStatus(item.id, 'PREPARING')}
-                              className="btn btn-primary"
-                              style={{ padding: '4px 10px', fontSize: '0.75rem', width: '100%' }}
-                            >
-                              <Play size={12} /> Iniciar Preparo
-                            </button>
-                          )}
-
-                          {item.status === 'PREPARING' && (
-                            <button
-                              onClick={() => handleUpdateItemStatus(item.id, 'READY')}
-                              className="btn btn-success"
-                              style={{ padding: '4px 10px', fontSize: '0.75rem', width: '100%' }}
-                            >
-                              <CheckCircle2 size={12} /> Marcar como Pronto
-                            </button>
-                          )}
-                        </div>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-            </div>
-          ))}
+                {/* BOTÃO ÚNICO PARA TODA A MESA / PEDIDO */}
+                <div>
+                  {anyPending ? (
+                    <button
+                      onClick={() => handleBatchUpdateStatus(order.id, 'PREPARING')}
+                      className="btn btn-primary"
+                      style={{ width: '100%', padding: '12px', fontSize: '0.9rem', background: isBar ? '#0284C7' : undefined }}
+                    >
+                      <Play size={16} />
+                      {isBar ? '🍸 Iniciar Preparo das Bebidas' : '👨‍🍳 Iniciar Preparo dos Pratos'}
+                    </button>
+                  ) : isPreparing ? (
+                    <button
+                      onClick={() => handleBatchUpdateStatus(order.id, 'READY')}
+                      className="btn btn-success"
+                      style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}
+                    >
+                      <CheckCircle2 size={16} />
+                      {isBar ? '✅ Marcar Bebidas Prontas' : '✅ Marcar Pratos Prontos'}
+                    </button>
+                  ) : (
+                    <div style={{ textTransform: 'uppercase', textAlign: 'center', fontWeight: 800, color: 'var(--accent-emerald)', fontSize: '0.85rem', padding: '8px' }}>
+                      ✅ Pedido Pronto
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

@@ -109,10 +109,25 @@ export const api = {
     }
   },
 
+  async getBarQueue(): Promise<Order[]> {
+    try {
+      return await fetchWithTimeout('/kitchen/bar-queue');
+    } catch {
+      return [];
+    }
+  },
+
   async updateKitchenItemStatus(itemId: string, status: string) {
     return await fetchWithTimeout(`/kitchen/item/${itemId}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status })
+    }, 5000);
+  },
+
+  async updateOrderBatchStatus(orderId: string, status: string, filterType?: 'FOOD' | 'DRINK') {
+    return await fetchWithTimeout(`/kitchen/order/${orderId}/batch-status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, filterType })
     }, 5000);
   },
 

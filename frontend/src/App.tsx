@@ -109,7 +109,7 @@ export function AppContent() {
   useEffect(() => {
     // Entrar na sala do WebSocket com base na rota ativa
     const path = location.pathname;
-    if (path.includes('/cozinha')) joinRoom('kitchen');
+    if (path.includes('/cozinha') || path.includes('/bar')) joinRoom('kitchen');
     if (path.includes('/garcom')) joinRoom('waiter');
     if (path.includes('/caixa')) joinRoom('cashier');
   }, [location.pathname]);
@@ -160,7 +160,8 @@ export function AppContent() {
             path="/garcom"
             element={<WaiterScreen isOnline={isOnline} onOrderCreated={checkOfflineCount} />}
           />
-          <Route path="/cozinha" element={<KitchenScreen />} />
+          <Route path="/cozinha" element={<KitchenScreen type="FOOD" />} />
+          <Route path="/bar" element={<KitchenScreen type="BAR" />} />
           <Route path="/caixa" element={<CashierScreen />} />
           <Route path="/relatorios" element={<ReportsStockScreen />} />
           {/* Rota coringa para redirecionamento seguro */}

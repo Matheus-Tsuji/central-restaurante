@@ -7,6 +7,10 @@ export class KitchenService {
     return OrderRepository.findKitchenOrders();
   }
 
+  static listBarQueue(): Order[] {
+    return OrderRepository.findBarOrders();
+  }
+
   static updateItemStatus(itemId: string, status: OrderItemStatus): Order {
     const updatedItem = OrderRepository.updateOrderItemStatus(itemId, status);
     if (!updatedItem) {
@@ -18,7 +22,6 @@ export class KitchenService {
       throw new Error('Pedido correspondente não encontrado.');
     }
 
-    // Verificar se todos os itens do pedido já estão PRONTOS
     if (order.items && order.items.length > 0) {
       const allReady = order.items.every(i => i.status === 'READY' || i.status === 'DELIVERED' || i.status === 'CANCELLED');
       const anyPreparing = order.items.some(i => i.status === 'PREPARING');
@@ -33,6 +36,16 @@ export class KitchenService {
     const updatedOrder = OrderRepository.findById(order.id)!;
     notifyOrderStatusChanged(updatedOrder);
 
+    return updatedOrder;
+  }
+
+  static updateOrderBatchStatus(orderId: string, status: OrderItemStatus, filterType?: 'FOOD' | 'DRINK'): Order {
+    const updatedOrder = OrderRepository.updateOrderItemsStatusBatch(orderId, status, filterType);
+    if (!updatedOrder) {
+      throw new Error('Pedido não encontrado.');
+    }
+
+    notifyOrderStatusChanged(updatedOrder);
     return updatedOrder;
   }
 }

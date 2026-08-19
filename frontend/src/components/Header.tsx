@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Utensils, ChefHat, Receipt, BarChart3, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Utensils, ChefHat, GlassWater, Receipt, BarChart3, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 interface HeaderProps {
   isOnline: boolean;
@@ -83,12 +83,12 @@ export const Header: React.FC<HeaderProps> = ({
               color: currentPath.includes('/garcom') || currentPath === '/' ? 'var(--accent-blue)' : 'var(--text-secondary)',
               boxShadow: currentPath.includes('/garcom') || currentPath === '/' ? 'var(--shadow-sm)' : 'none',
               borderRadius: 'var(--radius-sm)',
-              padding: '8px 16px',
+              padding: '8px 14px',
               fontSize: '0.85rem'
             }}
           >
             <Utensils size={18} />
-            Garçom (Mesas)
+            Garçom
           </button>
 
           <button
@@ -99,12 +99,28 @@ export const Header: React.FC<HeaderProps> = ({
               color: currentPath.includes('/cozinha') ? 'var(--accent-emerald)' : 'var(--text-secondary)',
               boxShadow: currentPath.includes('/cozinha') ? 'var(--shadow-sm)' : 'none',
               borderRadius: 'var(--radius-sm)',
-              padding: '8px 16px',
+              padding: '8px 14px',
               fontSize: '0.85rem'
             }}
           >
             <ChefHat size={18} />
             Cozinha (KDS)
+          </button>
+
+          <button
+            onClick={() => navigate('/bar')}
+            className="btn"
+            style={{
+              background: currentPath.includes('/bar') ? '#FFFFFF' : 'transparent',
+              color: currentPath.includes('/bar') ? '#0284C7' : 'var(--text-secondary)',
+              boxShadow: currentPath.includes('/bar') ? 'var(--shadow-sm)' : 'none',
+              borderRadius: 'var(--radius-sm)',
+              padding: '8px 14px',
+              fontSize: '0.85rem'
+            }}
+          >
+            <GlassWater size={18} />
+            Bar (Bebidas)
           </button>
 
           <button
@@ -115,7 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
               color: currentPath.includes('/caixa') ? 'var(--accent-blue)' : 'var(--text-secondary)',
               boxShadow: currentPath.includes('/caixa') ? 'var(--shadow-sm)' : 'none',
               borderRadius: 'var(--radius-sm)',
-              padding: '8px 16px',
+              padding: '8px 14px',
               fontSize: '0.85rem'
             }}
           >
@@ -131,7 +147,7 @@ export const Header: React.FC<HeaderProps> = ({
               color: currentPath.includes('/relatorios') ? 'var(--accent-emerald)' : 'var(--text-secondary)',
               boxShadow: currentPath.includes('/relatorios') ? 'var(--shadow-sm)' : 'none',
               borderRadius: 'var(--radius-sm)',
-              padding: '8px 16px',
+              padding: '8px 14px',
               fontSize: '0.85rem'
             }}
           >

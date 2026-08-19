@@ -57,21 +57,53 @@ export class OrderRepository {
   }
 
   static findKitchenOrders(): Order[] {
+    // Fila da Cozinha: apenas pedidos que contêm pratos/comidas (category != 'Bebidas')
     const orders = db.prepare(`
       SELECT DISTINCT o.*, t.number as table_number, u.name as waiter_name
       FROM orders o
       JOIN tables t ON t.id = o.table_id
       JOIN users u ON u.id = o.waiter_id
       JOIN order_items oi ON oi.order_id = o.id
-      WHERE oi.status IN ('PENDING', 'PREPARING') AND o.status NOT IN ('CLOSED', 'CANCELLED')
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      WHERE oi.status IN ('PENDING', 'PREPARING') 
+        AND o.status NOT IN ('CLOSED', 'CANCELLED')
+        AND mi.category != 'Bebidas'
       ORDER BY o.created_at ASC
     `).all() as (Order & { table_number: number; waiter_name: string })[];
 
     const getItems = db.prepare(`
-      SELECT oi.*, mi.name as menu_item_name
+      SELECT oi.*, mi.name as menu_item_name, mi.category
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
-      WHERE oi.order_id = ? AND oi.status IN ('PENDING', 'PREPARING', 'READY')
+      WHERE oi.order_id = ? AND oi.status IN ('PENDING', 'PREPARING', 'READY') AND mi.category != 'Bebidas'
+    `);
+
+    return orders.map(order => ({
+      ...order,
+      items: getItems.all(order.id) as OrderItem[]
+    }));
+  }
+
+  static findBarOrders(): Order[] {
+    // Fila do Bar: apenas pedidos que contêm bebidas (category = 'Bebidas')
+    const orders = db.prepare(`
+      SELECT DISTINCT o.*, t.number as table_number, u.name as waiter_name
+      FROM orders o
+      JOIN tables t ON t.id = o.table_id
+      JOIN users u ON u.id = o.waiter_id
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      WHERE oi.status IN ('PENDING', 'PREPARING') 
+        AND o.status NOT IN ('CLOSED', 'CANCELLED')
+        AND mi.category = 'Bebidas'
+      ORDER BY o.created_at ASC
+    `).all() as (Order & { table_number: number; waiter_name: string })[];
+
+    const getItems = db.prepare(`
+      SELECT oi.*, mi.name as menu_item_name, mi.category
+      FROM order_items oi
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      WHERE oi.order_id = ? AND oi.status IN ('PENDING', 'PREPARING', 'READY') AND mi.category = 'Bebidas'
     `);
 
     return orders.map(order => ({
@@ -84,7 +116,6 @@ export class OrderRepository {
     orderData: { table_id: string; waiter_id: string; notes?: string; offline_sync_id?: string },
     itemsData: { menu_item_id: string; quantity: number; notes?: string }[]
   ): { order: Order | null; error?: string } {
-    // 1. Idempotência para pedidos vindos do sincronismo offline do garçom
     if (orderData.offline_sync_id) {
       const existing = this.findByOfflineSyncId(orderData.offline_sync_id);
       if (existing) {
@@ -97,7 +128,6 @@ export class OrderRepository {
       return { order: null, error: 'Mesa não encontrada.' };
     }
 
-    // 2. Validar preços e estoque de cada item
     let calculatedTotal = 0;
     const preparedItems: { id: string; menu_item_id: string; quantity: number; unit_price: number; total_price: number; notes?: string }[] = [];
 
@@ -107,7 +137,6 @@ export class OrderRepository {
         return { order: null, error: `Item do cardápio '${item.menu_item_id}' não encontrado ou inativo.` };
       }
 
-      // Tentar abater estoque dos ingredientes
       const stockCheck = InventoryRepository.deductStockForMenuItem(item.menu_item_id, item.quantity);
       if (!stockCheck.success) {
         return { order: null, error: `Estoque insuficiente para ${menuItem.name}: ${stockCheck.missingIngredient}` };
@@ -128,7 +157,6 @@ export class OrderRepository {
 
     const orderId = randomUUID();
 
-    // 3. Executar transação de criação
     const createTransaction = db.transaction(() => {
       db.prepare(`
         INSERT INTO orders (id, table_id, waiter_id, status, total_amount, notes, offline_sync_id)
@@ -144,7 +172,6 @@ export class OrderRepository {
         insertItem.run(pi.id, orderId, pi.menu_item_id, pi.quantity, pi.unit_price, pi.total_price, pi.notes || null);
       }
 
-      // Atualizar status da mesa para Ocupada se estivesse Livre
       if (table.status === 'FREE') {
         TableRepository.updateStatus(table.id, 'OCCUPIED');
       }
@@ -175,6 +202,43 @@ export class OrderRepository {
 
     const item = db.prepare('SELECT * FROM order_items WHERE id = ?').get(itemId) as OrderItem | undefined;
     return item || null;
+  }
+
+  // Atualização em lote de todos os itens de um pedido com 1 único clique no card
+  static updateOrderItemsStatusBatch(orderId: string, status: OrderItemStatus, filterType?: 'FOOD' | 'DRINK'): Order | null {
+    if (filterType === 'FOOD') {
+      db.prepare(`
+        UPDATE order_items
+        SET status = ?
+        WHERE order_id = ? AND menu_item_id IN (SELECT id FROM menu_items WHERE category != 'Bebidas')
+      `).run(status, orderId);
+    } else if (filterType === 'DRINK') {
+      db.prepare(`
+        UPDATE order_items
+        SET status = ?
+        WHERE order_id = ? AND menu_item_id IN (SELECT id FROM menu_items WHERE category = 'Bebidas')
+      `).run(status, orderId);
+    } else {
+      db.prepare(`
+        UPDATE order_items
+        SET status = ?
+        WHERE order_id = ?
+      `).run(status, orderId);
+    }
+
+    const order = this.findById(orderId);
+    if (order && order.items) {
+      const allReady = order.items.every(i => i.status === 'READY' || i.status === 'DELIVERED' || i.status === 'CANCELLED');
+      const anyPreparing = order.items.some(i => i.status === 'PREPARING');
+
+      if (allReady) {
+        this.updateOrderStatus(orderId, 'READY');
+      } else if (anyPreparing) {
+        this.updateOrderStatus(orderId, 'PREPARING');
+      }
+    }
+
+    return this.findById(orderId);
   }
 
   static getTableBill(tableId: string): TableBillSummary | null {
