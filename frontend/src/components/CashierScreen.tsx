@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Table } from '../types';
 import { api } from '../services/api';
+import { formatDateTimeBR } from '../utils/dateUtils';
 import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw, Printer, X, Plus, Minus, Trash2, Layers, Clock, ShieldCheck, Edit3 } from 'lucide-react';
 
 type PaymentMethodType = 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX';
@@ -908,7 +909,7 @@ export const CashierScreen: React.FC = () => {
                 <div>
                   <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>Mesa {detail.table_number}</span>
                   <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: '10px' }}>
-                    Garçom: {detail.waiter_name} • Fechado: {detail.closed_at}
+                    Garçom: {detail.waiter_name} • Fechado: {formatDateTimeBR(detail.closed_at)}
                   </span>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
                     Total: R$ {detail.total_amount.toFixed(2)}

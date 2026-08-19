@@ -46,4 +46,8 @@ export class CashierService {
   static getDailyReport(dateStr?: string): DailyReport {
     return CashierRepository.getDailyReport(dateStr);
   }
+
+  static closeDailyExpedient(dateStr?: string, userId?: string) {
+    return CashierRepository.closeDailyExpedient(dateStr, userId);
+  }
 }

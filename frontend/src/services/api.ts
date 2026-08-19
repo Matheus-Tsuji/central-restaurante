@@ -181,6 +181,12 @@ export const api = {
     }
   },
 
+  async closeDailyExpedient(): Promise<any> {
+    return await fetchWithTimeout('/cashier/close-expedient', {
+      method: 'POST'
+    }, 8000);
+  },
+
   async getInventory(): Promise<InventoryItem[]> {
     try {
       return await fetchWithTimeout('/inventory');

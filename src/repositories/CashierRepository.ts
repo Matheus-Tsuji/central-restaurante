@@ -195,7 +195,7 @@ export class CashierRepository {
       FROM cashier_sessions cs
       JOIN users u1 ON u1.id = cs.opened_by_id
       LEFT JOIN users u2 ON u2.id = cs.closed_by_id
-      WHERE date(cs.opened_at) = date(?)
+      WHERE date(cs.opened_at) = date(?) OR date(cs.opened_at) = date('now', 'localtime')
       ORDER BY cs.opened_at DESC
       LIMIT 1
     `).get(targetDate) as CashRegisterSession | undefined;
@@ -203,7 +203,7 @@ export class CashierRepository {
     const paymentTotals = db.prepare(`
       SELECT payment_method, SUM(amount) as total
       FROM payments
-      WHERE date(created_at) = date(?)
+      WHERE date(created_at) = date(?) OR date(created_at) = date('now', 'localtime')
       GROUP BY payment_method
     `).all(targetDate) as { payment_method: PaymentMethod; total: number }[];
 
@@ -227,9 +227,9 @@ export class CashierRepository {
       FROM orders o
       JOIN tables t ON t.id = o.table_id
       JOIN users u ON u.id = o.waiter_id
-      WHERE o.status = 'CLOSED' AND date(o.updated_at) = date(?)
+      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime'))
       ORDER BY o.updated_at ASC
-    `).all(targetDate) as { order_id: string; total_amount: number; closed_at: string; table_number: number; waiter_name: string }[];
+    `).all(targetDate, targetDate) as { order_id: string; total_amount: number; closed_at: string; table_number: number; waiter_name: string }[];
 
     const getItemDetails = db.prepare(`
       SELECT mi.name, oi.quantity, oi.unit_price, oi.total_price
@@ -264,6 +264,98 @@ export class CashierRepository {
       by_payment_method,
       table_orders_detail,
       inventory_alerts
+    };
+  }
+
+  static closeDailyExpedient(dateStr?: string, userId: string = 'u_caixa') {
+    const targetDate = dateStr || new Date().toISOString().split('T')[0]!;
+
+    // 1. Prato Mais Vendido (Comida)
+    const topFood = db.prepare(`
+      SELECT mi.name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as total_revenue
+      FROM order_items oi
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      JOIN orders o ON o.id = oi.order_id
+      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime')) AND mi.category != 'Bebidas'
+      GROUP BY mi.id
+      ORDER BY total_qty DESC
+      LIMIT 1
+    `).get(targetDate, targetDate) as { name: string; total_qty: number; total_revenue: number } | undefined;
+
+    // 2. Bebida Mais Vendida
+    const topDrink = db.prepare(`
+      SELECT mi.name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as total_revenue
+      FROM order_items oi
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      JOIN orders o ON o.id = oi.order_id
+      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime')) AND mi.category = 'Bebidas'
+      GROUP BY mi.id
+      ORDER BY total_qty DESC
+      LIMIT 1
+    `).get(targetDate, targetDate) as { name: string; total_qty: number; total_revenue: number } | undefined;
+
+    // 3. Mesa de Maior Faturamento
+    const topTable = db.prepare(`
+      SELECT t.number as table_number, SUM(o.total_amount) as total_revenue
+      FROM orders o
+      JOIN tables t ON t.id = o.table_id
+      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime'))
+      GROUP BY t.id
+      ORDER BY total_revenue DESC
+      LIMIT 1
+    `).get(targetDate, targetDate) as { table_number: number; total_revenue: number } | undefined;
+
+    // 4. Método de Pagamento Mais Rentável
+    const topPayment = db.prepare(`
+      SELECT payment_method, SUM(amount) as total_revenue
+      FROM payments
+      WHERE date(created_at) = date(?) OR date(created_at) = date('now', 'localtime')
+      GROUP BY payment_method
+      ORDER BY total_revenue DESC
+      LIMIT 1
+    `).get(targetDate) as { payment_method: PaymentMethod; total_revenue: number } | undefined;
+
+    // 5. Insumos Consumidos no Dia (Baixa Real de Estoque)
+    const consumedInventory = db.prepare(`
+      SELECT inv.id, inv.name, inv.unit, SUM(oi.quantity * mii.quantity_required) as total_consumed
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      JOIN menu_item_ingredients mii ON mii.menu_item_id = oi.menu_item_id
+      JOIN inventory inv ON inv.id = mii.inventory_id
+      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime'))
+      GROUP BY inv.id
+    `).all(targetDate, targetDate) as { id: string; name: string; unit: string; total_consumed: number }[];
+
+    // Abater fisicamente do banco de dados no estoque
+    const updateInv = db.prepare(`
+      UPDATE inventory
+      SET quantity = MAX(0, quantity - ?), updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `);
+
+    for (const item of consumedInventory) {
+      updateInv.run(item.total_consumed, item.id);
+    }
+
+    // Encerrar sessão ativa de caixa se houver
+    const activeSession = this.getActiveSession();
+    if (activeSession) {
+      this.closeSession(activeSession.id, userId, activeSession.total_sales);
+    }
+
+    const report = this.getDailyReport(targetDate);
+
+    return {
+      success: true,
+      closed_at: new Date().toISOString(),
+      report,
+      analytics: {
+        top_food: topFood || { name: 'Nenhum prato vendido', total_qty: 0, total_revenue: 0 },
+        top_drink: topDrink || { name: 'Nenhuma bebida vendida', total_qty: 0, total_revenue: 0 },
+        top_table: topTable || { table_number: 0, total_revenue: 0 },
+        top_payment: topPayment || { payment_method: 'N/A', total_revenue: 0 }
+      },
+      inventory_consumed: consumedInventory
     };
   }
 }

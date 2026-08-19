@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import type { DailyReport, InventoryItem } from '../types';
 import { api } from '../services/api';
 import { socket } from '../services/socket';
-import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X } from 'lucide-react';
+import { formatDateBR, formatDateTimeBR } from '../utils/dateUtils';
+import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard } from 'lucide-react';
 
 export const ReportsStockScreen: React.FC = () => {
   const [report, setReport] = useState<DailyReport | null>(null);
@@ -10,6 +11,11 @@ export const ReportsStockScreen: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [receiptText, setReceiptText] = useState<string | null>(null);
+
+  // Modais de Fechamento de Expediente
+  const [showCloseConfirmModal, setShowCloseConfirmModal] = useState<boolean>(false);
+  const [expedientResult, setExpedientResult] = useState<any | null>(null);
+  const [closingExpedient, setClosingExpedient] = useState<boolean>(false);
 
   useEffect(() => {
     loadData();
@@ -56,6 +62,21 @@ export const ReportsStockScreen: React.FC = () => {
     }
   }
 
+  // Executa o Fechamento Definitivo do Expediente
+  async function handleFinalCloseExpedient() {
+    setClosingExpedient(true);
+    try {
+      const res = await api.closeDailyExpedient();
+      setExpedientResult(res);
+      setShowCloseConfirmModal(false);
+      loadData();
+    } catch (err: any) {
+      alert(`Erro ao encerrar expediente: ${err.message}`);
+    } finally {
+      setClosingExpedient(false);
+    }
+  }
+
   if (loading) {
     return <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>Carregando dados financeiros e estoque...</div>;
   }
@@ -65,6 +86,212 @@ export const ReportsStockScreen: React.FC = () => {
   return (
     <div style={{ padding: '16px', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
+      {/* 🔴 MODAL 1: DUPLA CONFIRMAÇÃO PARA FECHAR EXPEDIENTE DO DIA */}
+      {showCloseConfirmModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1300,
+          backdropFilter: 'blur(5px)'
+        }}>
+          <div className="clean-card animate-fade-in modal-container" style={{
+            background: '#FFFFFF',
+            borderRadius: 'var(--radius-md)',
+            width: '520px',
+            maxWidth: '94%',
+            padding: '24px',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ShieldAlert size={26} color="#DC2626" />
+                <h2 style={{ fontSize: '1.2rem', color: '#991B1B' }}>Encerrar Expediente Diário</h2>
+              </div>
+              <button onClick={() => setShowCloseConfirmModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={22} color="var(--text-muted)" />
+              </button>
+            </div>
+
+            <div style={{ background: '#FEE2E2', padding: '14px', borderRadius: 'var(--radius-sm)', color: '#991B1B', fontSize: '0.88rem', lineHeight: '1.5' }}>
+              <strong>Tem certeza de que deseja encerrar o expediente de hoje ({formatDateBR(report?.date)})?</strong>
+              <ul style={{ marginTop: '8px', paddingLeft: '20px', fontSize: '0.82rem' }}>
+                <li>Irá calcular a rotatividade exata de alimentos e bebidas.</li>
+                <li>Irá abater fisicamente no estoque o consumo em gramas e unidades dos pratos vendidos.</li>
+                <li>Irá fechar as sessões ativas do caixa e gerar os relatórios gerenciais finais.</li>
+              </ul>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+              <button
+                onClick={() => setShowCloseConfirmModal(false)}
+                className="btn btn-outline"
+                style={{ flex: 1, padding: '12px', minHeight: '44px' }}
+              >
+                Voltar
+              </button>
+              <button
+                onClick={handleFinalCloseExpedient}
+                disabled={closingExpedient}
+                className="btn"
+                style={{
+                  flex: 2,
+                  padding: '12px',
+                  background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
+                  color: '#FFFFFF',
+                  fontWeight: 800,
+                  minHeight: '44px'
+                }}
+              >
+                <Lock size={18} />
+                {closingExpedient ? 'Encerrando...' : 'SIM, ENCERRAR EXPEDIENTE'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📊 MODAL 2: ANALYTICAL EXPEDIENT CLOSING RESULT (RELATÓRIO DE ROTATIVIDADE & ESTOQUE) */}
+      {expedientResult && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1350,
+          backdropFilter: 'blur(5px)'
+        }}>
+          <div className="clean-card animate-fade-in modal-container" style={{
+            background: '#FFFFFF',
+            borderRadius: 'var(--radius-md)',
+            width: '750px',
+            maxWidth: '95%',
+            padding: '24px',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            {/* Header do Relatório Final */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <CheckCircle2 size={28} color="var(--accent-emerald)" />
+                <div>
+                  <h2 style={{ fontSize: '1.2rem', color: '#065F46' }}>Relatório Consolidado de Encerramento</h2>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Expediente encerrado com sucesso em {formatDateTimeBR(expedientResult.closed_at)}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setExpedientResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={22} color="var(--text-muted)" />
+              </button>
+            </div>
+
+            {/* Destaques das Métricas de Venda (Rankings) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px' }}>
+              
+              {/* Prato Top */}
+              <div style={{ background: 'var(--accent-emerald-light)', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 700, color: '#065F46' }}>
+                  <Utensils size={15} /> Prato Mais Vendido
+                </div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#065F46' }}>
+                  {expedientResult.analytics.top_food.name}
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#047857' }}>
+                  {expedientResult.analytics.top_food.total_qty} un (R$ {expedientResult.analytics.top_food.total_revenue.toFixed(2)})
+                </span>
+              </div>
+
+              {/* Bebida Top */}
+              <div style={{ background: 'var(--accent-blue-light)', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 700, color: '#0369A1' }}>
+                  <Wine size={15} /> Bebida Mais Vendida
+                </div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0369A1' }}>
+                  {expedientResult.analytics.top_drink.name}
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#0284C7' }}>
+                  {expedientResult.analytics.top_drink.total_qty} un (R$ {expedientResult.analytics.top_drink.total_revenue.toFixed(2)})
+                </span>
+              </div>
+
+              {/* Mesa Top */}
+              <div style={{ background: '#FEF3C7', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 700, color: '#B45309' }}>
+                  <Trophy size={15} /> Mesa Top Faturamento
+                </div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#B45309' }}>
+                  {expedientResult.analytics.top_table.table_number ? `Mesa ${expedientResult.analytics.top_table.table_number}` : 'N/A'}
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#92400E' }}>
+                  R$ {expedientResult.analytics.top_table.total_revenue.toFixed(2)}
+                </span>
+              </div>
+
+              {/* Método Top */}
+              <div style={{ background: '#F3E8FF', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 700, color: '#6B21A8' }}>
+                  <CreditCard size={15} /> Método Top Rendimento
+                </div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#6B21A8' }}>
+                  {expedientResult.analytics.top_payment.payment_method}
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#7E22CE' }}>
+                  R$ {expedientResult.analytics.top_payment.total_revenue.toFixed(2)}
+                </span>
+              </div>
+
+            </div>
+
+            {/* Tabela de Abatimento e Baixa Real no Estoque */}
+            <div>
+              <h3 style={{ fontSize: '0.92rem', marginBottom: '8px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Flame size={16} color="#DC2626" /> Rotatividade de Alimentos (Baixa no Estoque Real):
+              </h3>
+
+              {expedientResult.inventory_consumed.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '16px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Nenhum insumo consumido hoje.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto', background: 'var(--bg-subtle)', padding: '10px', borderRadius: 'var(--radius-sm)' }}>
+                  {expedientResult.inventory_consumed.map((inv: any) => (
+                    <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FFFFFF', padding: '8px 12px', borderRadius: '4px', border: '1px solid var(--border-light)', fontSize: '0.82rem' }}>
+                      <span style={{ fontWeight: 700 }}>{inv.name}</span>
+                      <span style={{ fontWeight: 800, color: '#DC2626' }}>
+                        - {inv.total_consumed} {inv.unit} retirados
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button onClick={() => setExpedientResult(null)} className="btn btn-primary" style={{ width: '100%', padding: '12px' }}>
+              Concluir e Fechar Relatório
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Reimpressão Térmica do Cupom .TXT */}
       {receiptText && (
         <div style={{
@@ -138,12 +365,28 @@ export const ReportsStockScreen: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* 🔴 BOTÃO VERMELHO DE ENCERRAMENTO DE EXPEDIENTE */}
+            <button
+              onClick={() => setShowCloseConfirmModal(true)}
+              className="btn"
+              style={{
+                background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
+                color: '#FFFFFF',
+                fontWeight: 800,
+                padding: '8px 14px',
+                fontSize: '0.85rem',
+                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)'
+              }}
+            >
+              <Lock size={16} /> ENCERRAR EXPEDIENTE DO DIA
+            </button>
+
             <button onClick={loadData} className="btn btn-outline" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
               <RefreshCw size={14} className={refreshing ? 'spin' : ''} /> Atualizar Relatório
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              <Calendar size={15} /> Data: {report?.date || new Date().toISOString().split('T')[0]}
+              <Calendar size={15} /> Data: {formatDateBR(report?.date)}
             </div>
           </div>
         </div>
@@ -291,7 +534,7 @@ export const ReportsStockScreen: React.FC = () => {
                   <div>
                     <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>Mesa {detail.table_number}</span>
                     <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: '10px' }}>
-                      Atendido por: {detail.waiter_name} • Fechado: {detail.closed_at}
+                      Atendido por: {detail.waiter_name} • Fechado: {formatDateTimeBR(detail.closed_at)}
                     </span>
                   </div>
 

@@ -86,4 +86,15 @@ export class CashierController {
       next(err);
     }
   }
+
+  static async closeDailyExpedient(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const dateStr = req.body.date as string | undefined;
+      const userId = req.user?.userId || 'u_caixa';
+      const result = CashierService.closeDailyExpedient(dateStr, userId);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
 }

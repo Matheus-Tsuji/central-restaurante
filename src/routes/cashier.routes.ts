@@ -18,5 +18,6 @@ router.post('/session/close', authorize(['CASHIER', 'ADMIN']), validateBody(clos
 router.post('/payment', validateBody(processPaymentSchema), CashierController.processPayment);
 router.get('/receipt/order/:orderId', CashierController.reprintReceipt);
 router.get('/report', CashierController.getDailyReport);
+router.post('/close-expedient', authorize(['CASHIER', 'ADMIN']), CashierController.closeDailyExpedient);
 
 export default router;
