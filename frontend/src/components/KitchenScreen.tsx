@@ -63,7 +63,7 @@ export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) =
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             {isBar ? <GlassWater size={28} color="#0284C7" /> : <ChefHat size={28} color="var(--accent-emerald)" />}
-            <h1 style={{ fontSize: '1.4rem' }}>
+            <h1 className="kds-tv-title" style={{ fontSize: '1.4rem' }}>
               {isBar ? 'Painel do Bar (Bebidas)' : 'Painel da Cozinha (KDS Pratos)'}
             </h1>
           </div>
@@ -94,13 +94,11 @@ export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) =
       ) : (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
           gap: '20px'
         }}>
           {orders.map(order => {
-            // Verificar status predominante do pedido para o botão único
             const anyPending = order.items?.some(i => i.status === 'PENDING');
-            const allPreparingOrReady = order.items?.every(i => i.status === 'PREPARING' || i.status === 'READY');
             const isPreparing = !anyPending && order.items?.some(i => i.status === 'PREPARING');
 
             return (
@@ -109,7 +107,7 @@ export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) =
                 className="clean-card animate-fade-in"
                 style={{
                   padding: '18px',
-                  borderLeft: `5px solid ${isBar ? '#0284C7' : 'var(--accent-emerald)'}`,
+                  borderLeft: `6px solid ${isBar ? '#0284C7' : 'var(--accent-emerald)'}`,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
@@ -117,19 +115,19 @@ export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) =
                 }}
               >
                 <div>
-                  {/* Header do Card */}
+                  {/* Header do Card com Alta Visibilidade em TVs */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-light)', paddingBottom: '10px', marginBottom: '12px' }}>
                     <div>
-                      <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      <span className="kds-tv-card-header" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                         Mesa {order.table_number || order.table_id}
                       </span>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                         Atendido por: {order.waiter_name || 'Garçom'}
                       </div>
                     </div>
 
-                    <span className="badge badge-pending" style={{ fontSize: '0.7rem' }}>
-                      <Clock size={12} /> {getTimeElapsed(order.created_at)}
+                    <span className="badge badge-pending" style={{ fontSize: '0.78rem', padding: '6px 10px' }}>
+                      <Clock size={14} /> {getTimeElapsed(order.created_at)}
                     </span>
                   </div>
 
@@ -139,7 +137,7 @@ export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) =
                       <div
                         key={item.id}
                         style={{
-                          padding: '8px 10px',
+                          padding: '10px 12px',
                           borderRadius: 'var(--radius-sm)',
                           background: item.status === 'PREPARING' ? (isBar ? '#E0F2FE' : 'var(--accent-emerald-light)') : 'var(--bg-subtle)',
                           display: 'flex',
@@ -148,17 +146,17 @@ export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) =
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>
+                          <span style={{ fontWeight: 700, fontSize: '1rem' }}>
                             {item.quantity}x {item.menu_item_name || 'Item'}
                           </span>
-                          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: item.status === 'PREPARING' ? 'var(--accent-blue)' : 'var(--text-secondary)' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: item.status === 'PREPARING' ? 'var(--accent-blue)' : 'var(--text-secondary)' }}>
                             {item.status === 'PENDING' ? 'PENDENTE' : item.status === 'PREPARING' ? 'EM PREPARO' : 'PRONTO'}
                           </span>
                         </div>
 
                         {item.notes && (
-                          <div style={{ fontSize: '0.75rem', color: '#B45309', background: '#FEF3C7', padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <AlertCircle size={12} /> Obs: {item.notes}
+                          <div style={{ fontSize: '0.8rem', color: '#B45309', background: '#FEF3C7', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                            <AlertCircle size={14} /> Obs: {item.notes}
                           </div>
                         )}
                       </div>
@@ -166,28 +164,28 @@ export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) =
                   </div>
                 </div>
 
-                {/* BOTÃO ÚNICO PARA TODA A MESA / PEDIDO */}
+                {/* BOTÃO ÚNICO PARA TODA A MESA DE ALTA VISIBILIDADE */}
                 <div>
                   {anyPending ? (
                     <button
                       onClick={() => handleBatchUpdateStatus(order.id, 'PREPARING')}
-                      className="btn btn-primary"
-                      style={{ width: '100%', padding: '12px', fontSize: '0.9rem', background: isBar ? '#0284C7' : undefined }}
+                      className="btn btn-primary kds-tv-btn"
+                      style={{ width: '100%', padding: '14px', fontSize: '1rem', background: isBar ? '#0284C7' : undefined }}
                     >
-                      <Play size={16} />
+                      <Play size={18} />
                       {isBar ? '🍸 Iniciar Preparo das Bebidas' : '👨‍🍳 Iniciar Preparo dos Pratos'}
                     </button>
                   ) : isPreparing ? (
                     <button
                       onClick={() => handleBatchUpdateStatus(order.id, 'READY')}
-                      className="btn btn-success"
-                      style={{ width: '100%', padding: '12px', fontSize: '0.9rem' }}
+                      className="btn btn-success kds-tv-btn"
+                      style={{ width: '100%', padding: '14px', fontSize: '1rem' }}
                     >
-                      <CheckCircle2 size={16} />
+                      <CheckCircle2 size={18} />
                       {isBar ? '✅ Marcar Bebidas Prontas' : '✅ Marcar Pratos Prontos'}
                     </button>
                   ) : (
-                    <div style={{ textTransform: 'uppercase', textAlign: 'center', fontWeight: 800, color: 'var(--accent-emerald)', fontSize: '0.85rem', padding: '8px' }}>
+                    <div style={{ textTransform: 'uppercase', textAlign: 'center', fontWeight: 800, color: 'var(--accent-emerald)', fontSize: '0.95rem', padding: '10px' }}>
                       ✅ Pedido Pronto
                     </div>
                   )}
