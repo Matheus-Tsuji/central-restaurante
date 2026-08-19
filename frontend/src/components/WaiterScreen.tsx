@@ -162,34 +162,35 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
   }
 
   return (
-    <div style={{ padding: '16px', maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ padding: '12px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
       
-      {/* Grid Principal Adaptável */}
-      <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '20px' }}>
+      {/* Grid Principal Adaptável que vira Flex ColUNA no Celular sem overflow */}
+      <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '16px' }}>
         
         {/* Painel Esquerdo: Mapa de Mesas & Cardápio */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
           
           {/* Seção Mapa de Mesas */}
-          <div className="clean-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 style={{ fontSize: '1.05rem' }}>Mapa de Mesas</h2>
+          <div className="clean-card" style={{ padding: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <h2 style={{ fontSize: '1rem' }}>Mapa de Mesas</h2>
                 {refreshing && <RefreshCw size={14} className="spin" color="var(--accent-blue)" />}
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', fontSize: '0.75rem' }}>
-                <span className="badge badge-free">Livre</span>
-                <span className="badge badge-occupied">Ocupada</span>
-                <span className="badge badge-pending">Pagamento</span>
+              <div style={{ display: 'flex', gap: '6px', fontSize: '0.7rem' }}>
+                <span className="badge badge-free" style={{ padding: '2px 8px' }}>Livre</span>
+                <span className="badge badge-occupied" style={{ padding: '2px 8px' }}>Ocupada</span>
+                <span className="badge badge-pending" style={{ padding: '2px 8px' }}>Pagamento</span>
               </div>
             </div>
 
             {/* Grid de Mesas Responsivo para Toque no Celular */}
-            <div style={{
+            <div className="waiter-table-grid" style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-              gap: '10px'
+              gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+              gap: '8px',
+              width: '100%'
             }}>
               {tables.map(t => {
                 const isSelected = selectedTable?.id === t.id;
@@ -213,21 +214,23 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
                       background: bg,
                       border: `2px solid ${border}`,
                       borderRadius: 'var(--radius-md)',
-                      padding: '12px 8px',
+                      padding: '10px 4px',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
+                      justifyContent: 'center',
                       gap: '4px',
                       cursor: 'pointer',
-                      minHeight: '64px',
+                      minHeight: '60px',
                       transition: 'all 0.15s ease',
+                      width: '100%',
                       boxShadow: isSelected ? '0 4px 12px rgba(2, 132, 199, 0.15)' : 'none'
                     }}
                   >
-                    <span style={{ fontSize: '1rem', fontWeight: 800 }}>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 800 }}>
                       Mesa {t.number}
                     </span>
-                    <span className={`badge ${badgeClass}`} style={{ fontSize: '0.6rem', padding: '2px 6px' }}>
+                    <span className={`badge ${badgeClass}`} style={{ fontSize: '0.58rem', padding: '2px 4px' }}>
                       {t.status === 'FREE' ? 'Livre' : t.status === 'OCCUPIED' ? 'Ocupada' : 'Pagamento'}
                     </span>
                   </button>
@@ -237,13 +240,13 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
           </div>
 
           {/* Seção Seleção de Produtos do Cardápio */}
-          <div className="clean-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
-              <h2 style={{ fontSize: '1.05rem' }}>Cardápio de Produtos</h2>
+          <div className="clean-card" style={{ padding: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+              <h2 style={{ fontSize: '1rem' }}>Cardápio de Produtos</h2>
 
               {/* Input Busca no Celular */}
               <div style={{ position: 'relative', width: '100%', maxWidth: '220px' }}>
-                <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
                   type="text"
                   placeholder="Buscar produto..."
@@ -251,10 +254,10 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
                   onChange={e => setSearchQuery(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '8px 12px 8px 34px',
+                    padding: '6px 12px 6px 32px',
                     borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--border-light)',
-                    fontSize: '0.85rem',
+                    fontSize: '0.82rem',
                     outline: 'none'
                   }}
                 />
@@ -262,15 +265,15 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
             </div>
 
             {/* Abas de Categorias Roláveis no Celular */}
-            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '14px', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '12px', WebkitOverflowScrolling: 'touch', width: '100%' }}>
               {categories.map(cat => (
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
                   style={{
-                    padding: '8px 16px',
+                    padding: '6px 14px',
                     borderRadius: 'var(--radius-full)',
-                    fontSize: '0.82rem',
+                    fontSize: '0.78rem',
                     fontWeight: 600,
                     border: '1px solid',
                     borderColor: activeCategory === cat ? 'var(--accent-blue)' : 'var(--border-light)',
@@ -278,7 +281,7 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
                     color: activeCategory === cat ? 'var(--accent-blue)' : 'var(--text-secondary)',
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
-                    minHeight: '40px'
+                    minHeight: '36px'
                   }}
                 >
                   {cat}
@@ -286,11 +289,12 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
               ))}
             </div>
 
-            {/* Grid de Pratos Otimizado para Telas de Celular */}
-            <div style={{
+            {/* Grid de Pratos 100% Ajustável sem estouro lateral */}
+            <div className="waiter-menu-grid" style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-              gap: '12px'
+              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+              gap: '10px',
+              width: '100%'
             }}>
               {filteredMenuItems.map(item => (
                 <div
@@ -298,32 +302,33 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
                   style={{
                     border: '1px solid var(--border-light)',
                     borderRadius: 'var(--radius-sm)',
-                    padding: '12px',
+                    padding: '10px',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    gap: '8px',
-                    background: '#FFFFFF'
+                    gap: '6px',
+                    background: '#FFFFFF',
+                    width: '100%'
                   }}
                 >
                   <div>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--accent-emerald)', fontWeight: 700, textTransform: 'uppercase' }}>
+                    <span style={{ fontSize: '0.62rem', color: 'var(--accent-emerald)', fontWeight: 700, textTransform: 'uppercase' }}>
                       {item.category}
                     </span>
-                    <h3 style={{ fontSize: '0.9rem', margin: '2px 0' }}>{item.name}</h3>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
+                    <h3 style={{ fontSize: '0.85rem', margin: '2px 0', lineHeight: 1.2 }}>{item.name}</h3>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
                       {item.description}
                     </p>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                       R$ {item.price.toFixed(2)}
                     </span>
                     <button
                       onClick={() => addToCart(item)}
                       className="btn btn-primary"
-                      style={{ padding: '6px 10px', fontSize: '0.78rem', minHeight: '36px' }}
+                      style={{ padding: '4px 8px', fontSize: '0.75rem', minHeight: '34px' }}
                     >
                       <Plus size={14} /> Add
                     </button>
@@ -336,14 +341,14 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
         </div>
 
         {/* Painel Direito / Carrinho Desktop & Mobile Drawer */}
-        <div className={`clean-card ${cartItemCount > 0 && showMobileCart ? 'mobile-cart-fixed' : ''}`} style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: 'fit-content' }}>
+        <div className={`clean-card ${showMobileCart ? 'mobile-cart-fixed' : 'desktop-cart-sidebar'}`} style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: 'fit-content', width: '100%' }}>
           
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--border-light)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ShoppingBag size={22} color="var(--accent-blue)" />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border-light)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShoppingBag size={20} color="var(--accent-blue)" />
               <div>
-                <h2 style={{ fontSize: '1.1rem' }}>Comanda do Pedido</h2>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                <h2 style={{ fontSize: '1rem' }}>Comanda do Pedido</h2>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                   {selectedTable ? `Lançando para ${selectedTable.name}` : 'Selecione uma mesa'}
                 </span>
               </div>
@@ -351,71 +356,71 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
 
             {showMobileCart && (
               <button onClick={() => setShowMobileCart(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X size={22} color="var(--text-muted)" />
+                <X size={20} color="var(--text-muted)" />
               </button>
             )}
           </div>
 
           {feedback && (
             <div style={{
-              marginTop: '12px',
-              padding: '10px 14px',
+              marginTop: '10px',
+              padding: '8px 12px',
               borderRadius: 'var(--radius-sm)',
-              fontSize: '0.82rem',
+              fontSize: '0.8rem',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
               background: feedback.type === 'success' ? 'var(--accent-emerald-light)' : '#FEE2E2',
               color: feedback.type === 'success' ? '#065F46' : '#991B1B'
             }}>
-              {feedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+              {feedback.type === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
               {feedback.message}
             </div>
           )}
 
           {/* Lista de Itens no Carrinho */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', margin: '14px 0', maxHeight: '360px', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '12px 0', maxHeight: '340px', overflowY: 'auto' }}>
             {cart.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              <div style={{ textAlign: 'center', padding: '24px 10px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                 Selecione os pratos no cardápio para adicionar ao pedido da mesa.
               </div>
             ) : (
               cart.map(c => (
-                <div key={c.menuItem.id} style={{ padding: '10px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div key={c.menuItem.id} style={{ padding: '8px 10px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{c.menuItem.name}</span>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>{c.menuItem.name}</span>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                         R$ {c.menuItem.price.toFixed(2)} un
                       </div>
                     </div>
-                    <span style={{ fontWeight: 800, fontSize: '0.9rem' }}>
+                    <span style={{ fontWeight: 800, fontSize: '0.88rem' }}>
                       R$ {(c.menuItem.price * c.quantity).toFixed(2)}
                     </span>
                   </div>
 
                   {/* Controles de Quantidade Otimizados para Celular */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
                     <input
                       type="text"
                       placeholder="Obs: sem cebola..."
                       value={c.notes}
                       onChange={e => updateNotes(c.menuItem.id, e.target.value)}
                       style={{
-                        padding: '6px 8px',
+                        padding: '4px 6px',
                         borderRadius: '4px',
                         border: '1px solid var(--border-light)',
                         fontSize: '0.75rem',
                         flex: 1
                       }}
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#FFFFFF', padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#FFFFFF', padding: '2px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
                       <button onClick={() => updateQuantity(c.menuItem.id, -1)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                        <Minus size={14} />
+                        <Minus size={13} />
                       </button>
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem', minWidth: '18px', textAlign: 'center' }}>{c.quantity}</span>
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem', minWidth: '16px', textAlign: 'center' }}>{c.quantity}</span>
                       <button onClick={() => updateQuantity(c.menuItem.id, 1)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                        <Plus size={14} />
+                        <Plus size={13} />
                       </button>
                     </div>
                   </div>
@@ -425,10 +430,10 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
           </div>
 
           {/* Resumo Financeiro & Envio */}
-          <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total do Pedido:</span>
-              <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--accent-blue)' }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Total do Pedido:</span>
+              <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--accent-blue)' }}>
                 R$ {cartTotal.toFixed(2)}
               </span>
             </div>
@@ -437,7 +442,7 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
               onClick={handleSendOrder}
               disabled={loading || cart.length === 0}
               className="btn btn-success"
-              style={{ width: '100%', padding: '12px', fontSize: '0.95rem' }}
+              style={{ width: '100%', padding: '10px', fontSize: '0.92rem', minHeight: '44px' }}
             >
               <Send size={16} />
               {loading ? 'Enviando...' : 'Enviar Pedido para Produção'}
@@ -455,7 +460,7 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
           onClick={() => setShowMobileCart(true)}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShoppingBag size={20} />
+            <ShoppingBag size={18} />
             <span>{cartItemCount} {cartItemCount === 1 ? 'item' : 'itens'} na comanda</span>
           </div>
 
