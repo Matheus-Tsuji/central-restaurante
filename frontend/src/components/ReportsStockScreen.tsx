@@ -1,18 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import type { DailyReport, InventoryItem } from '../types';
 import { api } from '../services/api';
-import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award } from 'lucide-react';
+import { socket } from '../services/socket';
+import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw } from 'lucide-react';
 
 export const ReportsStockScreen: React.FC = () => {
   const [report, setReport] = useState<DailyReport | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
   useEffect(() => {
     loadData();
+
+    if (socket) {
+      socket.on('payment:processed', () => {
+        loadData();
+      });
+      socket.on('order:created', () => {
+        loadData();
+      });
+    }
+
+    return () => {
+      if (socket) {
+        socket.off('payment:processed');
+        socket.off('order:created');
+      }
+    };
   }, []);
 
   async function loadData() {
+    setRefreshing(true);
     try {
       const [rData, iData] = await Promise.all([api.getDailyReport(), api.getInventory()]);
       setReport(rData);
@@ -21,6 +40,7 @@ export const ReportsStockScreen: React.FC = () => {
       console.error('Erro ao carregar relatórios e estoque:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
@@ -43,8 +63,14 @@ export const ReportsStockScreen: React.FC = () => {
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            <Calendar size={16} /> Data: {report?.date || new Date().toISOString().split('T')[0]}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button onClick={loadData} className="btn btn-outline" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+              <RefreshCw size={14} className={refreshing ? 'spin' : ''} /> Atualizar Relatório
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              <Calendar size={16} /> Data: {report?.date || new Date().toISOString().split('T')[0]}
+            </div>
           </div>
         </div>
 
@@ -179,7 +205,7 @@ export const ReportsStockScreen: React.FC = () => {
       <div className="clean-card" style={{ padding: '20px' }}>
         <h2 style={{ fontSize: '1.1rem', marginBottom: '14px' }}>Relatório Detalhado de Comandas Fechadas por Mesa</h2>
 
-        {report?.table_orders_detail.length === 0 ? (
+        {!report?.table_orders_detail || report.table_orders_detail.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             Nenhum pedido foi fechado na data selecionada ainda.
           </div>
