@@ -6,7 +6,8 @@ export function generateReceiptTxt(
   tableBill: TableBillSummary,
   paymentsInput: { method: PaymentMethod; amount: number; amount_paid?: number }[],
   changeGiven: number,
-  cashierName: string = 'Caixa Principal'
+  cashierName: string = 'Caixa Principal',
+  includeTip: boolean = false
 ): { filePath: string; receiptContent: string } {
   const dirPath = path.join(process.cwd(), 'comprovantes_mesas');
 
@@ -36,6 +37,10 @@ export function generateReceiptTxt(
     itemsLines += `${itemNum} ${namePadded} ${qtyPadded} ${unitPadded} ${totalPadded}\n`;
   });
 
+  const subtotal = tableBill.total_amount;
+  const tipAmount = includeTip ? Number((subtotal * 0.10).toFixed(2)) : 0;
+  const grandTotal = Number((subtotal + tipAmount).toFixed(2));
+
   const methodMap: Record<PaymentMethod, string> = {
     CASH: 'DINHEIRO',
     CREDIT_CARD: 'CARTAO CREDITO',
@@ -55,7 +60,7 @@ export function generateReceiptTxt(
        CNPJ: 12.345.678/0001-90 - IE: ISENTO    
   Av. Principal, 1000 - Centro - São Paulo/SP   
            Tel: (11) 99999-8888                 
-------------------------------------------------
+================================================
          CUPOM DE CONSUMO DA MESA               
 ================================================
 Mesa: ${tableNumber} (${tableBill.table.name})
@@ -66,9 +71,10 @@ Operador Caixa: ${cashierName}
 ITEM  DESCRIÇÃO               QTD   VL.UNIT      TOTAL
 ------------------------------------------------
 ${itemsLines}------------------------------------------------
-SUBTOTAL:                             R$${tableBill.total_amount.toFixed(2).padStart(8, ' ')}
-DESCONTO:                              R$0.00
-TOTAL A PAGAR:                        R$${tableBill.total_amount.toFixed(2).padStart(8, ' ')}
+SUBTOTAL (SEM 10%):                   R$${subtotal.toFixed(2).padStart(8, ' ')}
+TAXA DE SERVIÇO (10% GARÇOM):         R$${tipAmount.toFixed(2).padStart(8, ' ')} ${includeTip ? '(INCLUÍDO)' : '(NÃO INCLUÍDO)'}
+------------------------------------------------
+TOTAL FINAL A PAGAR:                  R$${grandTotal.toFixed(2).padStart(8, ' ')}
 ------------------------------------------------
 FORMA(S) DE PAGAMENTO:
 ${paymentLines}------------------------------------------------

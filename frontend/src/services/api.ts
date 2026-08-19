@@ -148,10 +148,10 @@ export const api = {
     return await fetchWithTimeout(`/orders/table/${tableId}/bill`);
   },
 
-  async processPayment(tableId: string, payments: { method: string; amount: number; amount_paid?: number }[]) {
+  async processPayment(tableId: string, payments: { method: string; amount: number; amount_paid?: number }[], include_tip: boolean = false) {
     return await fetchWithTimeout('/cashier/payment', {
       method: 'POST',
-      body: JSON.stringify({ table_id: tableId, payments })
+      body: JSON.stringify({ table_id: tableId, payments, include_tip })
     }, 5000);
   },
 

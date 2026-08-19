@@ -430,11 +430,19 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
           </div>
 
           {/* Resumo Financeiro & Envio */}
-          <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Total do Pedido:</span>
-              <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--accent-blue)' }}>
-                R$ {cartTotal.toFixed(2)}
+          <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+              <span>Subtotal (Sem 10%):</span>
+              <span style={{ fontWeight: 700 }}>R$ {cartTotal.toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--accent-emerald)' }}>
+              <span>Sugestão Garçom (10%):</span>
+              <span style={{ fontWeight: 700 }}>+ R$ {(cartTotal * 0.10).toFixed(2)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-light)', paddingTop: '4px' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Total Estimado (c/ 10%):</span>
+              <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent-blue)' }}>
+                R$ {(cartTotal * 1.10).toFixed(2)}
               </span>
             </div>
 

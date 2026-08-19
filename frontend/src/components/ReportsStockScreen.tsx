@@ -3,7 +3,7 @@ import type { DailyReport, InventoryItem } from '../types';
 import { api } from '../services/api';
 import { socket } from '../services/socket';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateUtils';
-import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard, FileText, Download } from 'lucide-react';
 
 export const ReportsStockScreen: React.FC = () => {
   const [report, setReport] = useState<DailyReport | null>(null);
@@ -16,6 +16,7 @@ export const ReportsStockScreen: React.FC = () => {
   const [showCloseConfirmModal, setShowCloseConfirmModal] = useState<boolean>(false);
   const [expedientResult, setExpedientResult] = useState<any | null>(null);
   const [closingExpedient, setClosingExpedient] = useState<boolean>(false);
+  const [reportTxtModal, setReportTxtModal] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -127,7 +128,7 @@ export const ReportsStockScreen: React.FC = () => {
               <ul style={{ marginTop: '8px', paddingLeft: '20px', fontSize: '0.82rem' }}>
                 <li>Irá calcular a rotatividade exata de alimentos e bebidas.</li>
                 <li>Irá abater fisicamente no estoque o consumo em gramas e unidades dos pratos vendidos.</li>
-                <li>Irá fechar as sessões ativas do caixa e gerar os relatórios gerenciais finais.</li>
+                <li>Irá gerar o documento oficial em <code>.TXT</code> na pasta <code>relatorios_expediente/</code>.</li>
               </ul>
             </div>
 
@@ -203,6 +204,22 @@ export const ReportsStockScreen: React.FC = () => {
                 <X size={22} color="var(--text-muted)" />
               </button>
             </div>
+
+            {/* Banner Informativo do Arquivo .TXT Gerado */}
+            {expedientResult.report_text && (
+              <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ fontSize: '0.82rem', color: '#166534', fontWeight: 600 }}>
+                  📄 Documento de relatório salvo em <code>relatorios_expediente/</code>
+                </div>
+                <button
+                  onClick={() => setReportTxtModal(expedientResult.report_text)}
+                  className="btn btn-outline"
+                  style={{ padding: '6px 12px', fontSize: '0.78rem', color: '#166534', borderColor: '#166534' }}
+                >
+                  <FileText size={15} /> Visualizar Documento .TXT
+                </button>
+              </div>
+            )}
 
             {/* Destaques das Métricas de Venda (Rankings) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px' }}>
@@ -287,6 +304,64 @@ export const ReportsStockScreen: React.FC = () => {
 
             <button onClick={() => setExpedientResult(null)} className="btn btn-primary" style={{ width: '100%', padding: '12px' }}>
               Concluir e Fechar Relatório
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 📄 MODAL 3: VISUALIZADOR DE DOCUMENTO .TXT DO RELATÓRIO DO EXPEDIENTE */}
+      {reportTxtModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1400,
+          backdropFilter: 'blur(5px)'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: 'var(--radius-md)',
+            width: '680px',
+            maxWidth: '94%',
+            padding: '20px',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', paddingBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileText size={22} color="var(--accent-blue)" />
+                <h3 style={{ fontSize: '1.1rem' }}>Documento Oficial do Expediente (.TXT)</h3>
+              </div>
+              <button onClick={() => setReportTxtModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={20} color="var(--text-muted)" />
+              </button>
+            </div>
+
+            <pre style={{
+              background: '#0F172A',
+              color: '#38BDF8',
+              padding: '16px',
+              borderRadius: 'var(--radius-sm)',
+              fontFamily: 'monospace',
+              fontSize: '0.78rem',
+              maxHeight: '400px',
+              overflowY: 'auto',
+              whiteSpace: 'pre-wrap',
+              lineHeight: '1.45'
+            }}>
+              {reportTxtModal}
+            </pre>
+
+            <button onClick={() => setReportTxtModal(null)} className="btn btn-primary" style={{ width: '100%' }}>
+              Fechar Visualizador TXT
             </button>
           </div>
         </div>

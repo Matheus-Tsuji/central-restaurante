@@ -14,6 +14,7 @@ export const closeSessionSchema = z.object({
 
 export const processPaymentSchema = z.object({
   table_id: z.string().min(1, 'ID da mesa é obrigatório'),
+  include_tip: z.boolean().optional(),
   payments: z.array(
     z.object({
       method: z.enum(['CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'PIX']),
@@ -58,9 +59,9 @@ export class CashierController {
   static async processPayment(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const cashierUserId = req.user!.userId;
-      const { table_id, payments } = req.body;
+      const { table_id, payments, include_tip } = req.body;
 
-      const result = CashierService.processTablePayment(table_id, cashierUserId, payments);
+      const result = CashierService.processTablePayment(table_id, cashierUserId, payments, include_tip);
       res.json(result);
     } catch (err) {
       next(err);

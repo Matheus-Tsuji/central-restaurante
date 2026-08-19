@@ -19,9 +19,10 @@ export class CashierService {
   static processTablePayment(
     tableId: string,
     cashierUserId: string,
-    payments: { method: PaymentMethod; amount: number; amount_paid?: number }[]
+    payments: { method: PaymentMethod; amount: number; amount_paid?: number }[],
+    includeTip: boolean = false
   ): { success: boolean; change_given: number; message: string; receipt_file: string; receipt_text: string } {
-    const result = CashierRepository.processPayment(tableId, payments, cashierUserId);
+    const result = CashierRepository.processPayment(tableId, payments, cashierUserId, includeTip);
 
     const updatedTable = TableRepository.findById(tableId);
     if (updatedTable) {

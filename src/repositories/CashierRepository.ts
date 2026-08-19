@@ -4,6 +4,7 @@ import { TableRepository } from './TableRepository.js';
 import { OrderRepository } from './OrderRepository.js';
 import { InventoryRepository } from './InventoryRepository.js';
 import { generateReceiptTxt } from '../utils/receiptGenerator.js';
+import { generateExpedientReportTxt } from '../utils/expedientReportGenerator.js';
 import { randomUUID } from 'node:crypto';
 
 function getLocalDateStr(): string {
@@ -63,7 +64,8 @@ export class CashierRepository {
   static processPayment(
     tableId: string,
     paymentsInput: { method: PaymentMethod; amount: number; amount_paid?: number }[],
-    cashierUserId: string
+    cashierUserId: string,
+    includeTip: boolean = false
   ): { payments: Payment[]; change_given: number; receipt_file: string; receipt_text: string } {
     let session = this.getActiveSession();
     if (!session) {
@@ -80,15 +82,18 @@ export class CashierRepository {
       totalPaidInInput += (p.amount_paid !== undefined ? p.amount_paid : p.amount);
     }
 
-    if (totalPaidInInput < tableBill.total_amount) {
-      throw new Error(`Valor total pago (R$ ${totalPaidInInput.toFixed(2)}) é inferior ao total da conta (R$ ${tableBill.total_amount.toFixed(2)}).`);
+    const subtotal = tableBill.total_amount;
+    const requiredTotal = includeTip ? Number((subtotal * 1.10).toFixed(2)) : subtotal;
+
+    if (totalPaidInInput < requiredTotal - 0.01) {
+      throw new Error(`Valor total pago (R$ ${totalPaidInInput.toFixed(2)}) é inferior ao valor da conta com taxa de 10% (R$ ${requiredTotal.toFixed(2)}).`);
     }
 
     const createdPayments: Payment[] = [];
     let totalChangeGiven = 0;
 
     const processTransaction = db.transaction(() => {
-      let remainingBill = tableBill.total_amount;
+      let remainingBill = requiredTotal;
 
       for (const p of paymentsInput) {
         const paymentAmount = Math.min(p.amount, remainingBill);
@@ -136,7 +141,7 @@ export class CashierRepository {
 
     processTransaction();
 
-    const receiptResult = generateReceiptTxt(tableBill, paymentsInput, totalChangeGiven, session.opened_by_name);
+    const receiptResult = generateReceiptTxt(tableBill, paymentsInput, totalChangeGiven, session.opened_by_name, includeTip);
 
     return {
       payments: createdPayments,
@@ -191,7 +196,7 @@ export class CashierRepository {
 
     const totalChange = payments.reduce((acc, p) => acc + (p.change_given || 0), 0);
 
-    const receiptResult = generateReceiptTxt(tableBill as any, paymentsInput as any, totalChange, 'Operador Caixa');
+    const receiptResult = generateReceiptTxt(tableBill as any, paymentsInput as any, totalChange, 'Operador Caixa', false);
     return { receipt_text: receiptResult.receiptContent };
   }
 
@@ -352,8 +357,7 @@ export class CashierRepository {
 
     const report = this.getDailyReport(targetDate);
 
-    return {
-      success: true,
+    const fullExpedientData = {
       closed_at: new Date().toISOString(),
       report,
       analytics: {
@@ -363,6 +367,19 @@ export class CashierRepository {
         top_payment: topPayment || { payment_method: 'N/A', total_revenue: 0 }
       },
       inventory_consumed: consumedInventory
+    };
+
+    // GERAR DOCUMENTO .TXT DO RELATÓRIO DO EXPEDIENTE NA PASTA relatorios_expediente/
+    const reportTxtResult = generateExpedientReportTxt(fullExpedientData);
+
+    return {
+      success: true,
+      closed_at: fullExpedientData.closed_at,
+      report,
+      analytics: fullExpedientData.analytics,
+      inventory_consumed: consumedInventory,
+      report_file: reportTxtResult.filePath,
+      report_text: reportTxtResult.reportContent
     };
   }
 }

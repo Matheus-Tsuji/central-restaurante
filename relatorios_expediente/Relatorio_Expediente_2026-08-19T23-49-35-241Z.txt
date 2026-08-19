@@ -1,0 +1,42 @@
+================================================----------------------
+           CENTRAL RESTAURANTE S.A. - RELATÓRIO DE EXPEDIENTE           
+================================================----------------------
+Data do Expediente: 19/08/2026
+Horário do Encerramento: 20:49:35
+================================================----------------------
+
+1. RESUMO FINANCEIRO DIÁRIO
+----------------------------------------------------------------------
+Faturamento Total Bruto: R$ 139.04
+Total de Pedidos Encerrados: 1 mesa(s)
+
+VENDAS POR FORMA DE PAGAMENTO:
+- 💚 PIX:                R$ 139.04
+- 💳 Cartão de Crédito:  R$ 0.00
+- 💳 Cartão de Débito:   R$ 0.00
+- 💵 Dinheiro:           R$ 0.00
+
+2. ANÁLISE DE DESEMPENHO E RANKINGS (BUSINESS ANALYTICS)
+----------------------------------------------------------------------
+🏆 Prato Mais Vendido:     Smash Bacon Supreme (1 un - R$ 36.50)
+🍸 Bebida Mais Vendida:    Nenhuma bebida vendida (0 un - R$ 0.00)
+👑 Mesa Top Faturamento:   Mesa 1 (R$ 126.40)
+💳 Método Top Rendimento:  PIX (R$ 139.04)
+
+3. ROTATIVIDADE E BAIXA REAL DE INSUMOS NO ESTOQUE
+----------------------------------------------------------------------
+01. Bacon Defumado Fatiado (Grama)                -50 g
+02. Hambúrguer Smash 90g (Grama)                 -180 g
+03. Pão de Hambúrguer Brioche                     -1 un
+04. Picanha Bovina (Grama)                       -500 g
+05. Queijo Cheddar Fatiado                        -2 un
+
+4. DETALHAMENTO DE COMANDAS FECHADAS POR MESA
+----------------------------------------------------------------------
+• Mesa 01 | Garçom: Garçom João     | Fechado em: 2026-08-19 20:49:35 | Total:  R$ 126.40
+   - 1x Smash Bacon Supreme (R$ 36.50)
+   - 1x Picanha na Grelha 500g (R$ 89.90)
+----------------------------------------------------------------------
+================================================----------------------
+                     FIM DO RELATÓRIO DO EXPEDIENTE                     
+================================================----------------------

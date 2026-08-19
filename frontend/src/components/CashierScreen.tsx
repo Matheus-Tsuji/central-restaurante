@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Table } from '../types';
 import { api } from '../services/api';
 import { formatDateTimeBR } from '../utils/dateUtils';
-import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw, Printer, X, Plus, Minus, Trash2, Layers, Clock, ShieldCheck, Edit3 } from 'lucide-react';
+import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw, Printer, X, Plus, Minus, Trash2, Layers, Clock, ShieldCheck, Edit3, Percent } from 'lucide-react';
 
 type PaymentMethodType = 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX';
 
@@ -18,6 +18,9 @@ export const CashierScreen: React.FC = () => {
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [bill, setBill] = useState<any | null>(null);
   const [closedHistory, setClosedHistory] = useState<any[]>([]);
+
+  // Opção de Taxa de Serviço de 10% do Garçom
+  const [includeTip, setIncludeTip] = useState<boolean>(false);
 
   // Modo de visualização do extrato: 'ITEMS' (Agrupado) ou 'TIMELINE' (Por Horários)
   const [viewMode, setViewMode] = useState<'ITEMS' | 'TIMELINE'>('ITEMS');
@@ -68,9 +71,10 @@ export const CashierScreen: React.FC = () => {
     try {
       const bData = await api.getTableBill(tableId);
       setBill(bData);
-      const total = bData?.total_amount || 0;
-      setSingleAmountPaid(total.toString());
-      setSplitRows([{ id: '1', method: singleMethod, amount: total }]);
+      const subtotal = bData?.total_amount || 0;
+      const targetVal = includeTip ? Number((subtotal * 1.10).toFixed(2)) : subtotal;
+      setSingleAmountPaid(targetVal.toString());
+      setSplitRows([{ id: '1', method: singleMethod, amount: targetVal }]);
     } catch {
       setBill(null);
       setSplitRows([]);
@@ -82,6 +86,7 @@ export const CashierScreen: React.FC = () => {
     setFeedback(null);
     setIsSplitMode(false);
     setShowVerifyModal(false);
+    setIncludeTip(false);
     await refreshCurrentBill(t.id);
   }
 
@@ -120,15 +125,17 @@ export const CashierScreen: React.FC = () => {
     }
   }
 
-  const numericTotal = bill?.total_amount || 0;
+  const subtotalAmount = bill?.total_amount || 0;
+  const tipAmount = includeTip ? Number((subtotalAmount * 0.10).toFixed(2)) : 0;
+  const finalTotalAmount = Number((subtotalAmount + tipAmount).toFixed(2));
 
   // Cálculos para pagamento ÚNICO
-  const singlePaid = parseFloat(singleAmountPaid) || numericTotal;
-  const singleChange = singleMethod === 'CASH' && singlePaid > numericTotal ? singlePaid - numericTotal : 0;
+  const singlePaid = parseFloat(singleAmountPaid) || finalTotalAmount;
+  const singleChange = singleMethod === 'CASH' && singlePaid > finalTotalAmount ? singlePaid - finalTotalAmount : 0;
 
   // Cálculos para pagamento FRACIONADO (MÚLTIPLO)
   const totalAllocated = splitRows.reduce((acc, row) => acc + (row.amount || 0), 0);
-  const remainingToAllocate = Number(Math.max(0, numericTotal - totalAllocated).toFixed(2));
+  const remainingToAllocate = Number(Math.max(0, finalTotalAmount - totalAllocated).toFixed(2));
   
   let totalSplitChange = 0;
   splitRows.forEach(row => {
@@ -179,13 +186,13 @@ export const CashierScreen: React.FC = () => {
         paymentsToSend = [
           {
             method: singleMethod,
-            amount: numericTotal,
-            amount_paid: singleMethod === 'CASH' ? (singlePaid || numericTotal) : numericTotal
+            amount: finalTotalAmount,
+            amount_paid: singleMethod === 'CASH' ? (singlePaid || finalTotalAmount) : finalTotalAmount
           }
         ];
       } else {
-        if (Math.abs(totalAllocated - numericTotal) > 0.01 && totalAllocated < numericTotal) {
-          throw new Error(`O total das formas de pagamento (R$ ${totalAllocated.toFixed(2)}) é inferior ao valor da conta (R$ ${numericTotal.toFixed(2)}).`);
+        if (Math.abs(totalAllocated - finalTotalAmount) > 0.01 && totalAllocated < finalTotalAmount) {
+          throw new Error(`O total das formas de pagamento (R$ ${totalAllocated.toFixed(2)}) é inferior ao valor da conta com 10% (R$ ${finalTotalAmount.toFixed(2)}).`);
         }
 
         paymentsToSend = splitRows.map(r => ({
@@ -195,7 +202,7 @@ export const CashierScreen: React.FC = () => {
         }));
       }
 
-      const result = await api.processPayment(selectedTable.id, paymentsToSend);
+      const result = await api.processPayment(selectedTable.id, paymentsToSend, includeTip);
 
       if (result.receipt_text) {
         setReceiptText(result.receipt_text);
@@ -264,7 +271,7 @@ export const CashierScreen: React.FC = () => {
                 <div>
                   <h2 style={{ fontSize: '1.15rem' }}>Conferência da Mesa {selectedTable.number}</h2>
                   <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    Verifique os itens e horários lançados antes de concluir o pagamento
+                    Verifique os itens e a opção de 10% do garçom antes de concluir o pagamento
                   </span>
                 </div>
               </div>
@@ -289,7 +296,6 @@ export const CashierScreen: React.FC = () => {
                       <span style={{ color: 'var(--text-muted)' }}>Garçom: {ord.waiter_name || 'Equipe'}</span>
                     </div>
 
-                    {/* Itens deste pedido com opção de correção */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {ord.items?.map((it: any) => (
                         <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
@@ -300,7 +306,6 @@ export const CashierScreen: React.FC = () => {
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ fontWeight: 800 }}>R$ {it.total_price.toFixed(2)}</span>
-                            {/* Botões para corrigir no modal */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <button onClick={() => handleUpdateQuantity(it.id, it.quantity - 1)} style={{ background: 'none', border: '1px solid var(--border-light)', borderRadius: '4px', cursor: 'pointer', padding: '2px 4px' }}>
                                 <Minus size={12} />
@@ -321,19 +326,25 @@ export const CashierScreen: React.FC = () => {
               </div>
             </div>
 
-            {/* Resumo Final do Pagamento Selecionado */}
-            <div style={{ background: 'var(--accent-emerald-light)', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: '0.78rem', color: '#065F46', fontWeight: 600 }}>Forma de Pagamento Selecionada:</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#065F46' }}>
-                  {!isSplitMode ? methodLabels[singleMethod] : 'Dividido / Múltiplas Formas'}
-                </div>
+            {/* Detalhamento Explícito Sem 10% vs Com 10% no Modal */}
+            <div style={{ background: 'var(--bg-subtle)', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Subtotal dos Pratos (Sem 10%):</span>
+                <span style={{ fontWeight: 700 }}>R$ {subtotalAmount.toFixed(2)}</span>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.78rem', color: '#065F46', fontWeight: 600 }}>Total Final:</div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#065F46' }}>
-                  R$ {numericTotal.toFixed(2)}
-                </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: includeTip ? 'var(--accent-emerald)' : 'var(--text-muted)' }}>
+                <span>Taxa de Serviço do Garçom (10%):</span>
+                <span style={{ fontWeight: 700 }}>
+                  {includeTip ? `+ R$ ${tipAmount.toFixed(2)} (Incluído)` : 'R$ 0.00 (Isento)'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-light)', paddingTop: '6px', marginTop: '2px' }}>
+                <span style={{ fontWeight: 800, color: 'var(--accent-emerald)' }}>TOTAL FINAL A RECEBER:</span>
+                <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--accent-emerald)' }}>
+                  R$ {finalTotalAmount.toFixed(2)}
+                </span>
               </div>
             </div>
 
@@ -353,7 +364,7 @@ export const CashierScreen: React.FC = () => {
                 style={{ flex: 2, padding: '10px', fontSize: '0.95rem', minHeight: '44px' }}
               >
                 <CheckCircle2 size={18} />
-                {loading ? 'Encerrando...' : 'CONFIRMAR E EMITIR CUPOM'}
+                {loading ? 'Encerrando...' : `CONFIRMAR E IMPRIMIR (R$ ${finalTotalAmount.toFixed(2)})`}
               </button>
             </div>
 
@@ -572,7 +583,7 @@ export const CashierScreen: React.FC = () => {
           ) : (
             <>
               {/* EXIBIÇÃO DE ITENS COM POSSIBILIDADE DE CORREÇÃO/EXCLUSÃO */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
                 
                 {viewMode === 'ITEMS' ? (
                   /* VISÃO AGRUPADA DE ITENS */
@@ -604,12 +615,48 @@ export const CashierScreen: React.FC = () => {
                 )}
               </div>
 
-              {/* Total da Conta */}
-              <div style={{ background: 'var(--accent-blue-light)', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-blue-hover)' }}>Total da Mesa:</span>
-                <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--accent-blue)' }}>
-                  R$ {numericTotal.toFixed(2)}
+              {/* OPÇÃO INTERATIVA DE SELEÇÃO DOS 10% DO GARÇOM */}
+              <div style={{ background: '#F8FAFC', border: '1px solid var(--border-light)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={includeTip}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setIncludeTip(checked);
+                      const targetVal = checked ? Number((subtotalAmount * 1.10).toFixed(2)) : subtotalAmount;
+                      if (singleMethod === 'CASH') setSingleAmountPaid(targetVal.toString());
+                      if (isSplitMode && splitRows.length === 1) {
+                        setSplitRows([{ id: '1', method: splitRows[0].method, amount: targetVal }]);
+                      }
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent-emerald)' }}
+                  />
+                  <span><Percent size={14} style={{ display: 'inline', verticalAlign: '-2px' }} /> Incluir Taxa de Serviço (10% Garçom)</span>
+                </label>
+                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: includeTip ? 'var(--accent-emerald)' : 'var(--text-muted)' }}>
+                  + R$ {(subtotalAmount * 0.10).toFixed(2)}
                 </span>
+              </div>
+
+              {/* Detalhamento de Total da Conta: Sem 10% vs Com 10% */}
+              <div style={{ background: 'var(--accent-blue-light)', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <span>Subtotal (Sem 10%):</span>
+                  <span style={{ fontWeight: 700 }}>R$ {subtotalAmount.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: includeTip ? 'var(--accent-emerald)' : 'var(--text-muted)' }}>
+                  <span>Taxa de Serviço (10%):</span>
+                  <span style={{ fontWeight: 700 }}>{includeTip ? `+ R$ ${tipAmount.toFixed(2)}` : 'R$ 0.00 (Não inclusa)'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #BAE6FD', paddingTop: '4px', marginTop: '2px' }}>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--accent-blue-hover)' }}>
+                    Total a Pagar ({includeTip ? 'Com 10%' : 'Sem 10%'}):
+                  </span>
+                  <span style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--accent-blue)' }}>
+                    R$ {finalTotalAmount.toFixed(2)}
+                  </span>
+                </div>
               </div>
 
               {/* Seletor de Modo de Pagamento: Único vs Fracionado (Dividir) */}
@@ -635,7 +682,7 @@ export const CashierScreen: React.FC = () => {
                   onClick={() => {
                     setIsSplitMode(true);
                     if (splitRows.length === 0) {
-                      setSplitRows([{ id: '1', method: 'PIX', amount: numericTotal }]);
+                      setSplitRows([{ id: '1', method: 'PIX', amount: finalTotalAmount }]);
                     }
                   }}
                   style={{
@@ -659,7 +706,7 @@ export const CashierScreen: React.FC = () => {
                 </button>
               </div>
 
-              {/* MODO 1: PAGAMENTO ÚNICO - DISPONÍVEL PARA TODAS AS FORMAS (PIX, DINHEIRO, CARTÃO CRÉDITO, CARTÃO DÉBITO) */}
+              {/* MODO 1: PAGAMENTO ÚNICO */}
               {!isSplitMode ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
@@ -692,7 +739,7 @@ export const CashierScreen: React.FC = () => {
                       onClick={() => {
                         setSingleMethod('CASH');
                         if (!singleAmountPaid || parseFloat(singleAmountPaid) === 0) {
-                          setSingleAmountPaid(numericTotal.toString());
+                          setSingleAmountPaid(finalTotalAmount.toString());
                         }
                       }}
                       style={{
