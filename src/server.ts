@@ -1,52 +1,44 @@
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import cors from 'cors';
+import { createServer } from 'node:http';
+import { env } from './config/env.js';
+import { initDatabase } from './config/database.js';
+import { initSocketIO } from './sockets/socketManager.js';
+import apiRoutes from './routes/index.js';
+import { errorHandler } from './middlewares/errorHandler.js';
+
+// Inicializar banco de dados SQLite com tabelas e dados prévios
+initDatabase();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const httpServer = createServer(app);
 
+// Inicializar WebSockets em tempo real (Socket.IO)
+initSocketIO(httpServer);
+
+// Middlewares globais
+app.use(cors());
 app.use(express.json());
 
-interface Item {
-  id: string,
-  name: string,
-  price: number,
-}
-
-const itemsList: Item[] = []
-
-app.post('/items', (req, res) => {
-  const { id, name, price } = req.body;
-
-  if (!name || price === undefined) {
-    return res.status(400).json({ error: "Nome e preço são obrigatórios." })
-  }
-
-  const newItem: Item = { id: uuidv4(), name, price }
-
-  itemsList.push(newItem);
-
-  return res.status(201).json({
-    message: 'Item adicionado com sucesso!',
-    data: newItem
-  })
+// Rota de Healthcheck
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    system: 'Central de Restaurante Multi-telas',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
 });
 
-app.get('/items/:id', (req, res) => {
-  const { id } = req.params;
+// Rotas da API RESTful
+app.use('/api', apiRoutes);
 
-  const item = itemsList.find(item => item.id === id);
+// Middleware central de tratamento de erros
+app.use(errorHandler);
 
-  if (!item) {
-    return res.status(404).json({ error: 'Item não encontrado.' })
-  }
+const PORT = env.PORT;
 
-  return res.status(200).json(item)
-})
-
-app.get('/items', (req, res) => {
-  return res.status(200).json(itemsList)
-})
-
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Servidor Central rodando com sucesso em http://localhost:${PORT}`);
+  console.log(`📡 WebSocket Socket.IO pronto para conexões em tempo real.`);
 });
