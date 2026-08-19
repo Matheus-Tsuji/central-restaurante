@@ -1,14 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import type { Table } from '../types';
 import { api } from '../services/api';
-import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw, Printer, X } from 'lucide-react';
+import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw, Printer, X, Plus, Trash2, Layers } from 'lucide-react';
+
+type PaymentMethodType = 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX';
+
+interface SplitPaymentRow {
+  id: string;
+  method: PaymentMethodType;
+  amount: number;
+  amount_paid?: number;
+}
 
 export const CashierScreen: React.FC = () => {
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [bill, setBill] = useState<any | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX'>('PIX');
-  const [amountPaid, setAmountPaid] = useState<string>('');
+
+  // Modo de pagamento: 'SINGLE' (Único) ou 'SPLIT' (Múltiplo / Fracionado)
+  const [isSplitMode, setIsSplitMode] = useState<boolean>(false);
+
+  // Pagamento único
+  const [singleMethod, setSingleMethod] = useState<PaymentMethodType>('PIX');
+  const [singleAmountPaid, setSingleAmountPaid] = useState<string>('');
+
+  // Pagamentos fracionados (múltiplos)
+  const [splitRows, setSplitRows] = useState<SplitPaymentRow[]>([]);
+
   const [loading, setLoading] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [receiptText, setReceiptText] = useState<string | null>(null);
@@ -29,20 +47,68 @@ export const CashierScreen: React.FC = () => {
   async function handleSelectTable(t: Table) {
     setSelectedTable(t);
     setFeedback(null);
+    setIsSplitMode(false);
     try {
       const bData = await api.getTableBill(t.id);
       setBill(bData);
-      if (bData.total_amount) {
-        setAmountPaid(bData.total_amount.toString());
-      }
+      const total = bData.total_amount || 0;
+      setSingleAmountPaid(total.toString());
+
+      // Inicializa splitRows com a primeira forma contendo o total
+      setSplitRows([
+        { id: '1', method: 'PIX', amount: total }
+      ]);
     } catch (err: any) {
       setBill(null);
+      setSplitRows([]);
     }
   }
 
   const numericTotal = bill?.total_amount || 0;
-  const numericPaid = parseFloat(amountPaid) || 0;
-  const changeGiven = paymentMethod === 'CASH' && numericPaid > numericTotal ? numericPaid - numericTotal : 0;
+
+  // Cálculos para pagamento ÚNICO
+  const singlePaid = parseFloat(singleAmountPaid) || 0;
+  const singleChange = singleMethod === 'CASH' && singlePaid > numericTotal ? singlePaid - numericTotal : 0;
+
+  // Cálculos para pagamento FRACIONADO (MÚLTIPLO)
+  const totalAllocated = splitRows.reduce((acc, row) => acc + (row.amount || 0), 0);
+  const remainingToAllocate = Number(Math.max(0, numericTotal - totalAllocated).toFixed(2));
+  
+  // Cálculo de troco total nos pagamentos fracionados que usarem dinheiro
+  let totalSplitChange = 0;
+  splitRows.forEach(row => {
+    if (row.method === 'CASH' && row.amount_paid && row.amount_paid > row.amount) {
+      totalSplitChange += (row.amount_paid - row.amount);
+    }
+  });
+
+  function handleAddSplitRow() {
+    const defaultAmount = remainingToAllocate > 0 ? remainingToAllocate : 0;
+    setSplitRows(prev => [
+      ...prev,
+      { id: Date.now().toString(), method: 'CREDIT_CARD', amount: defaultAmount }
+    ]);
+  }
+
+  function handleRemoveSplitRow(id: string) {
+    if (splitRows.length === 1) return;
+    setSplitRows(prev => prev.filter(r => r.id !== id));
+  }
+
+  function handleUpdateSplitRow(id: string, field: keyof SplitPaymentRow, value: any) {
+    setSplitRows(prev =>
+      prev.map(r => {
+        if (r.id === id) {
+          const updated = { ...r, [field]: value };
+          if (field === 'method' && value !== 'CASH') {
+            delete updated.amount_paid;
+          }
+          return updated;
+        }
+        return r;
+      })
+    );
+  }
 
   async function handleProcessPayment() {
     if (!selectedTable) return;
@@ -50,21 +116,40 @@ export const CashierScreen: React.FC = () => {
     setFeedback(null);
 
     try {
-      const result = await api.processPayment(selectedTable.id, [
-        {
-          method: paymentMethod,
-          amount: numericTotal,
-          amount_paid: paymentMethod === 'CASH' ? numericPaid : numericTotal
+      let paymentsToSend: { method: PaymentMethodType; amount: number; amount_paid?: number }[] = [];
+
+      if (!isSplitMode) {
+        paymentsToSend = [
+          {
+            method: singleMethod,
+            amount: numericTotal,
+            amount_paid: singleMethod === 'CASH' ? singlePaid : numericTotal
+          }
+        ];
+      } else {
+        // Validação no modo fracionado
+        if (Math.abs(totalAllocated - numericTotal) > 0.01 && totalAllocated < numericTotal) {
+          throw new Error(`O total das formas de pagamento (R$ ${totalAllocated.toFixed(2)}) é inferior ao valor total da conta (R$ ${numericTotal.toFixed(2)}).`);
         }
-      ]);
+
+        paymentsToSend = splitRows.map(r => ({
+          method: r.method,
+          amount: Number(r.amount),
+          amount_paid: r.method === 'CASH' ? (r.amount_paid || r.amount) : r.amount
+        }));
+      }
+
+      const result = await api.processPayment(selectedTable.id, paymentsToSend);
 
       if (result.receipt_text) {
         setReceiptText(result.receipt_text);
       }
 
+      const calculatedChange = isSplitMode ? totalSplitChange : singleChange;
+
       setFeedback({
         type: 'success',
-        message: `Pagamento recebido com sucesso! Cupom salvo na pasta 'comprovantes_mesas/'. Troco: R$ ${result.change_given?.toFixed(2) || changeGiven.toFixed(2)}.`
+        message: `Pagamento recebido com sucesso! Cupom salvo na pasta 'comprovantes_mesas/'. Troco: R$ ${result.change_given?.toFixed(2) || calculatedChange.toFixed(2)}.`
       });
 
       setSelectedTable(null);
@@ -76,6 +161,13 @@ export const CashierScreen: React.FC = () => {
       setLoading(false);
     }
   }
+
+  const methodLabels: Record<PaymentMethodType, string> = {
+    PIX: '💚 PIX',
+    CASH: '💵 Dinheiro',
+    CREDIT_CARD: '💳 Cartão Crédito',
+    DEBIT_CARD: '💳 Cartão Débito'
+  };
 
   return (
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
@@ -144,7 +236,7 @@ export const CashierScreen: React.FC = () => {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 440px', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 480px', gap: '24px' }}>
         
         {/* Painel Esquerdo: Lista de Mesas para Fechamento */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -216,7 +308,7 @@ export const CashierScreen: React.FC = () => {
 
         </div>
 
-        {/* Painel Direito: Extrato & Calculadora de Pagamento */}
+        {/* Painel Direito: Extrato & Calculadora de Pagamento Fracionado/Único */}
         <div className="clean-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
             <Receipt size={22} color="var(--accent-blue)" />
@@ -251,7 +343,7 @@ export const CashierScreen: React.FC = () => {
           ) : (
             <>
               {/* Itens do Extrato */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
                 {bill.items_summary?.map((item: any) => (
                   <div key={item.menu_item_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}>
                     <div>
@@ -271,133 +363,290 @@ export const CashierScreen: React.FC = () => {
                 </span>
               </div>
 
-              {/* Seletor Método de Pagamento */}
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                  Forma de Pagamento:
-                </label>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <button
-                    onClick={() => setPaymentMethod('PIX')}
-                    style={{
-                      padding: '10px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid',
-                      borderColor: paymentMethod === 'PIX' ? 'var(--accent-emerald)' : 'var(--border-light)',
-                      background: paymentMethod === 'PIX' ? 'var(--accent-emerald-light)' : '#FFFFFF',
-                      color: paymentMethod === 'PIX' ? 'var(--accent-emerald)' : 'var(--text-secondary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <QrCode size={16} /> PIX
-                  </button>
-
-                  <button
-                    onClick={() => setPaymentMethod('CASH')}
-                    style={{
-                      padding: '10px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid',
-                      borderColor: paymentMethod === 'CASH' ? 'var(--accent-emerald)' : 'var(--border-light)',
-                      background: paymentMethod === 'CASH' ? 'var(--accent-emerald-light)' : '#FFFFFF',
-                      color: paymentMethod === 'CASH' ? 'var(--accent-emerald)' : 'var(--text-secondary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <DollarSign size={16} /> Dinheiro
-                  </button>
-
-                  <button
-                    onClick={() => setPaymentMethod('CREDIT_CARD')}
-                    style={{
-                      padding: '10px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid',
-                      borderColor: paymentMethod === 'CREDIT_CARD' ? 'var(--accent-blue)' : 'var(--border-light)',
-                      background: paymentMethod === 'CREDIT_CARD' ? 'var(--accent-blue-light)' : '#FFFFFF',
-                      color: paymentMethod === 'CREDIT_CARD' ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <CreditCard size={16} /> Cartão Crédito
-                  </button>
-
-                  <button
-                    onClick={() => setPaymentMethod('DEBIT_CARD')}
-                    style={{
-                      padding: '10px',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid',
-                      borderColor: paymentMethod === 'DEBIT_CARD' ? 'var(--accent-blue)' : 'var(--border-light)',
-                      background: paymentMethod === 'DEBIT_CARD' ? 'var(--accent-blue-light)' : '#FFFFFF',
-                      color: paymentMethod === 'DEBIT_CARD' ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <CreditCard size={16} /> Cartão Débito
-                  </button>
-                </div>
+              {/* Seletor de Modo de Pagamento: Único vs Fracionado (Dividir) */}
+              <div style={{ display: 'flex', gap: '8px', background: 'var(--bg-subtle)', padding: '4px', borderRadius: 'var(--radius-sm)' }}>
+                <button
+                  onClick={() => setIsSplitMode(false)}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: !isSplitMode ? '#FFFFFF' : 'transparent',
+                    color: !isSplitMode ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    boxShadow: !isSplitMode ? 'var(--shadow-sm)' : 'none'
+                  }}
+                >
+                  Pagamento Único (1 Forma)
+                </button>
+                <button
+                  onClick={() => {
+                    setIsSplitMode(true);
+                    if (splitRows.length === 0) {
+                      setSplitRows([{ id: '1', method: 'PIX', amount: numericTotal }]);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: isSplitMode ? '#FFFFFF' : 'transparent',
+                    color: isSplitMode ? 'var(--accent-emerald)' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    boxShadow: isSplitMode ? 'var(--shadow-sm)' : 'none'
+                  }}
+                >
+                  <Layers size={14} /> Dividir Pagamento (Múltiplo)
+                </button>
               </div>
 
-              {/* Calculadora de Troco para Dinheiro */}
-              {paymentMethod === 'CASH' && (
-                <div style={{ background: '#FEF3C7', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#B45309' }}>
-                    Valor Entregue pelo Cliente (R$):
+              {/* MODO 1: PAGAMENTO ÚNICO */}
+              {!isSplitMode ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    Forma de Pagamento:
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={amountPaid}
-                    onChange={e => setAmountPaid(e.target.value)}
-                    style={{
-                      padding: '8px',
-                      borderRadius: '4px',
-                      border: '1px solid #FCD34D',
-                      fontSize: '1rem',
-                      fontWeight: 700
-                    }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 700, color: '#B45309' }}>
-                    <span>Troco a devolver:</span>
-                    <span style={{ fontSize: '1.1rem' }}>R$ {changeGiven > 0 ? changeGiven.toFixed(2) : '0.00'}</span>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button
+                      onClick={() => setSingleMethod('PIX')}
+                      style={{
+                        padding: '10px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid',
+                        borderColor: singleMethod === 'PIX' ? 'var(--accent-emerald)' : 'var(--border-light)',
+                        background: singleMethod === 'PIX' ? 'var(--accent-emerald-light)' : '#FFFFFF',
+                        color: singleMethod === 'PIX' ? 'var(--accent-emerald)' : 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <QrCode size={16} /> PIX
+                    </button>
+
+                    <button
+                      onClick={() => setSingleMethod('CASH')}
+                      style={{
+                        padding: '10px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid',
+                        borderColor: singleMethod === 'CASH' ? 'var(--accent-emerald)' : 'var(--border-light)',
+                        background: singleMethod === 'CASH' ? 'var(--accent-emerald-light)' : '#FFFFFF',
+                        color: singleMethod === 'CASH' ? 'var(--accent-emerald)' : 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <DollarSign size={16} /> Dinheiro
+                    </button>
+
+                    <button
+                      onClick={() => setSingleMethod('CREDIT_CARD')}
+                      style={{
+                        padding: '10px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid',
+                        borderColor: singleMethod === 'CREDIT_CARD' ? 'var(--accent-blue)' : 'var(--border-light)',
+                        background: singleMethod === 'CREDIT_CARD' ? 'var(--accent-blue-light)' : '#FFFFFF',
+                        color: singleMethod === 'CREDIT_CARD' ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <CreditCard size={16} /> Cartão Crédito
+                    </button>
+
+                    <button
+                      onClick={() => setSingleMethod('DEBIT_CARD')}
+                      style={{
+                        padding: '10px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid',
+                        borderColor: singleMethod === 'DEBIT_CARD' ? 'var(--accent-blue)' : 'var(--border-light)',
+                        background: singleMethod === 'DEBIT_CARD' ? 'var(--accent-blue-light)' : '#FFFFFF',
+                        color: singleMethod === 'DEBIT_CARD' ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <CreditCard size={16} /> Cartão Débito
+                    </button>
+                  </div>
+
+                  {/* Calculadora de Troco para Dinheiro em Pagamento Único */}
+                  {singleMethod === 'CASH' && (
+                    <div style={{ background: '#FEF3C7', padding: '12px', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#B45309' }}>
+                        Valor Entregue pelo Cliente em Dinheiro (R$):
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={singleAmountPaid}
+                        onChange={e => setSingleAmountPaid(e.target.value)}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '4px',
+                          border: '1px solid #FCD34D',
+                          fontSize: '1rem',
+                          fontWeight: 700
+                        }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 700, color: '#B45309' }}>
+                        <span>Troco a devolver:</span>
+                        <span style={{ fontSize: '1.1rem' }}>R$ {singleChange > 0 ? singleChange.toFixed(2) : '0.00'}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* MODO 2: PAGAMENTO MÚLTIPLO / FRACIONADO */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      Formas de Pagamento Selecionadas:
+                    </label>
+
+                    <button
+                      onClick={handleAddSplitRow}
+                      className="btn btn-outline"
+                      style={{ padding: '4px 10px', fontSize: '0.78rem', color: 'var(--accent-emerald)', borderColor: 'var(--accent-emerald)' }}
+                    >
+                      <Plus size={14} /> Adicionar Forma
+                    </button>
+                  </div>
+
+                  {/* Lista de Linhas de Pagamento Fracionado */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '220px', overflowY: 'auto' }}>
+                    {splitRows.map((row, idx) => (
+                      <div key={row.id} style={{ border: '1px solid var(--border-light)', padding: '10px', borderRadius: 'var(--radius-sm)', background: '#FFFFFF', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)' }}>#{idx + 1}</span>
+
+                          {/* Dropdown Método */}
+                          <select
+                            value={row.method}
+                            onChange={e => handleUpdateSplitRow(row.id, 'method', e.target.value as PaymentMethodType)}
+                            style={{ padding: '6px', borderRadius: '4px', border: '1px solid var(--border-light)', fontSize: '0.82rem', fontWeight: 700, flex: 1 }}
+                          >
+                            <option value="PIX">💚 PIX</option>
+                            <option value="CREDIT_CARD">💳 Cartão Crédito</option>
+                            <option value="DEBIT_CARD">💳 Cartão Débito</option>
+                            <option value="CASH">💵 Dinheiro</option>
+                          </select>
+
+                          {/* Valor da Forma */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={row.amount}
+                              onChange={e => handleUpdateSplitRow(row.id, 'amount', parseFloat(e.target.value) || 0)}
+                              style={{ width: '90px', padding: '6px', borderRadius: '4px', border: '1px solid var(--border-light)', fontSize: '0.85rem', fontWeight: 700 }}
+                            />
+                          </div>
+
+                          {/* Botão Remover */}
+                          {splitRows.length > 1 && (
+                            <button
+                              onClick={() => handleRemoveSplitRow(row.id)}
+                              style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Campo extra de Troco se o método for Dinheiro */}
+                        {row.method === 'CASH' && (
+                          <div style={{ background: '#FEF3C7', padding: '6px 10px', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
+                            <span style={{ fontWeight: 700, color: '#B45309' }}>Valor pago em notas (R$):</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder={row.amount.toString()}
+                              value={row.amount_paid !== undefined ? row.amount_paid : ''}
+                              onChange={e => handleUpdateSplitRow(row.id, 'amount_paid', parseFloat(e.target.value) || 0)}
+                              style={{ width: '80px', padding: '4px', borderRadius: '4px', border: '1px solid #FCD34D', fontSize: '0.82rem', fontWeight: 700 }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Resumo do Pagamento Fracionado */}
+                  <div style={{ padding: '10px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Total Alocado:</span>
+                      <span style={{ fontWeight: 800 }}>R$ {totalAllocated.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Restante a Pagar:</span>
+                      <span style={{ fontWeight: 800, color: remainingToAllocate > 0 ? '#DC2626' : 'var(--accent-emerald)' }}>
+                        R$ {remainingToAllocate.toFixed(2)}
+                      </span>
+                    </div>
+                    {totalSplitChange > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#B45309', fontWeight: 700 }}>
+                        <span>Troco em Dinheiro:</span>
+                        <span>R$ {totalSplitChange.toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               <button
                 onClick={handleProcessPayment}
-                disabled={loading}
+                disabled={loading || (isSplitMode && remainingToAllocate > 0.01)}
                 className="btn btn-success"
-                style={{ width: '100%', padding: '12px', fontSize: '1rem', marginTop: '8px' }}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: '1rem',
+                  marginTop: '8px',
+                  opacity: (isSplitMode && remainingToAllocate > 0.01) ? 0.5 : 1,
+                  cursor: (isSplitMode && remainingToAllocate > 0.01) ? 'not-allowed' : 'pointer'
+                }}
               >
                 <CheckCircle2 size={18} />
-                {loading ? 'Processando...' : 'Finalizar Pagamento e Emitir Cupom'}
+                {loading
+                  ? 'Processando...'
+                  : isSplitMode
+                  ? (remainingToAllocate > 0.01 ? `Faltam R$ ${remainingToAllocate.toFixed(2)}` : 'Finalizar Pagamento Fracionado')
+                  : `Finalizar Pagamento (${methodLabels[singleMethod]})`}
               </button>
             </>
           )}
