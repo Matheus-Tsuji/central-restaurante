@@ -19,7 +19,6 @@ export class OrderService {
 
     const order = result.order;
 
-    // Disparar WebSocket para atualizar telas em tempo real
     notifyOrderCreated(order);
 
     const updatedTable = TableRepository.findById(tableId);
@@ -30,7 +29,6 @@ export class OrderService {
     return order;
   }
 
-  // Suporte a sincronização em lote (batch sync) para garçons offline
   static syncOfflineBatch(
     waiterId: string,
     batchOrders: {
@@ -56,6 +54,34 @@ export class OrderService {
     }
 
     return { syncedCount, errors };
+  }
+
+  static deleteItemFromOrder(itemId: string): { success: boolean } {
+    const res = OrderRepository.deleteOrderItem(itemId);
+    if (!res.success) {
+      throw new Error('Item não encontrado para exclusão.');
+    }
+
+    if (res.table_id) {
+      const table = TableRepository.findById(res.table_id);
+      if (table) notifyTableStatusChanged(table);
+    }
+
+    return { success: true };
+  }
+
+  static updateItemQuantity(itemId: string, quantity: number): { success: boolean } {
+    const res = OrderRepository.updateOrderItemQuantity(itemId, quantity);
+    if (!res.success) {
+      throw new Error('Item não encontrado para atualização de quantidade.');
+    }
+
+    if (res.table_id) {
+      const table = TableRepository.findById(res.table_id);
+      if (table) notifyTableStatusChanged(table);
+    }
+
+    return { success: true };
   }
 
   static getTableBill(tableId: string): TableBillSummary {

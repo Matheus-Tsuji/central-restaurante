@@ -124,10 +124,23 @@ export const api = {
     }, 5000);
   },
 
-  async updateOrderBatchStatus(orderId: string, status: string, filterType?: 'FOOD' | 'DRINK') {
+  async updateOrderBatchStatus(orderId: string, status: string, filterType?: 'FOOD' | 'DRINK' | 'BAR') {
     return await fetchWithTimeout(`/kitchen/order/${orderId}/batch-status`, {
       method: 'PATCH',
       body: JSON.stringify({ status, filterType })
+    }, 5000);
+  },
+
+  async deleteOrderItem(itemId: string) {
+    return await fetchWithTimeout(`/orders/item/${itemId}`, {
+      method: 'DELETE'
+    }, 5000);
+  },
+
+  async updateOrderItemQuantity(itemId: string, quantity: number) {
+    return await fetchWithTimeout(`/orders/item/${itemId}/quantity`, {
+      method: 'PATCH',
+      body: JSON.stringify({ quantity })
     }, 5000);
   },
 

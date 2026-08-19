@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Table } from '../types';
 import { api } from '../services/api';
-import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw, Printer, X, Plus, Trash2, Layers } from 'lucide-react';
+import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw, Printer, X, Plus, Minus, Trash2, Layers, Clock, ShieldCheck, Edit3 } from 'lucide-react';
 
 type PaymentMethodType = 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX';
 
@@ -17,6 +17,9 @@ export const CashierScreen: React.FC = () => {
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [bill, setBill] = useState<any | null>(null);
 
+  // Modo de visualização do extrato: 'ITEMS' (Agrupado) ou 'TIMELINE' (Por Horários)
+  const [viewMode, setViewMode] = useState<'ITEMS' | 'TIMELINE'>('ITEMS');
+
   // Modo de pagamento: 'SINGLE' (Único) ou 'SPLIT' (Múltiplo / Fracionado)
   const [isSplitMode, setIsSplitMode] = useState<boolean>(false);
 
@@ -26,6 +29,9 @@ export const CashierScreen: React.FC = () => {
 
   // Pagamentos fracionados (múltiplos)
   const [splitRows, setSplitRows] = useState<SplitPaymentRow[]>([]);
+
+  // Modal de Confirmação & Verificação de Segurança ao Fechar
+  const [showVerifyModal, setShowVerifyModal] = useState<boolean>(false);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -44,23 +50,48 @@ export const CashierScreen: React.FC = () => {
     }
   }
 
+  async function refreshCurrentBill(tableId: string) {
+    try {
+      const bData = await api.getTableBill(tableId);
+      setBill(bData);
+      const total = bData?.total_amount || 0;
+      setSingleAmountPaid(total.toString());
+      setSplitRows([{ id: '1', method: 'PIX', amount: total }]);
+    } catch {
+      setBill(null);
+      setSplitRows([]);
+    }
+  }
+
   async function handleSelectTable(t: Table) {
     setSelectedTable(t);
     setFeedback(null);
     setIsSplitMode(false);
-    try {
-      const bData = await api.getTableBill(t.id);
-      setBill(bData);
-      const total = bData.total_amount || 0;
-      setSingleAmountPaid(total.toString());
+    setShowVerifyModal(false);
+    await refreshCurrentBill(t.id);
+  }
 
-      // Inicializa splitRows com a primeira forma contendo o total
-      setSplitRows([
-        { id: '1', method: 'PIX', amount: total }
-      ]);
+  async function handleDeleteItem(itemId: string) {
+    if (!selectedTable) return;
+    if (!window.confirm('Deseja realmente remover este item da comanda da mesa?')) return;
+
+    try {
+      await api.deleteOrderItem(itemId);
+      await refreshCurrentBill(selectedTable.id);
+      loadTables();
     } catch (err: any) {
-      setBill(null);
-      setSplitRows([]);
+      alert(`Erro ao remover item: ${err.message}`);
+    }
+  }
+
+  async function handleUpdateQuantity(itemId: string, newQuantity: number) {
+    if (!selectedTable) return;
+    try {
+      await api.updateOrderItemQuantity(itemId, newQuantity);
+      await refreshCurrentBill(selectedTable.id);
+      loadTables();
+    } catch (err: any) {
+      alert(`Erro ao alterar quantidade: ${err.message}`);
     }
   }
 
@@ -74,7 +105,6 @@ export const CashierScreen: React.FC = () => {
   const totalAllocated = splitRows.reduce((acc, row) => acc + (row.amount || 0), 0);
   const remainingToAllocate = Number(Math.max(0, numericTotal - totalAllocated).toFixed(2));
   
-  // Cálculo de troco total nos pagamentos fracionados que usarem dinheiro
   let totalSplitChange = 0;
   splitRows.forEach(row => {
     if (row.method === 'CASH' && row.amount_paid && row.amount_paid > row.amount) {
@@ -110,10 +140,12 @@ export const CashierScreen: React.FC = () => {
     );
   }
 
-  async function handleProcessPayment() {
+  // Acionado após confirmação no Modal de Verificação
+  async function handleFinalProcessPayment() {
     if (!selectedTable) return;
     setLoading(true);
     setFeedback(null);
+    setShowVerifyModal(false);
 
     try {
       let paymentsToSend: { method: PaymentMethodType; amount: number; amount_paid?: number }[] = [];
@@ -127,9 +159,8 @@ export const CashierScreen: React.FC = () => {
           }
         ];
       } else {
-        // Validação no modo fracionado
         if (Math.abs(totalAllocated - numericTotal) > 0.01 && totalAllocated < numericTotal) {
-          throw new Error(`O total das formas de pagamento (R$ ${totalAllocated.toFixed(2)}) é inferior ao valor total da conta (R$ ${numericTotal.toFixed(2)}).`);
+          throw new Error(`O total das formas de pagamento (R$ ${totalAllocated.toFixed(2)}) é inferior ao valor da conta (R$ ${numericTotal.toFixed(2)}).`);
         }
 
         paymentsToSend = splitRows.map(r => ({
@@ -149,7 +180,7 @@ export const CashierScreen: React.FC = () => {
 
       setFeedback({
         type: 'success',
-        message: `Pagamento recebido com sucesso! Cupom salvo na pasta 'comprovantes_mesas/'. Troco: R$ ${result.change_given?.toFixed(2) || calculatedChange.toFixed(2)}.`
+        message: `Mesa ${selectedTable.number} encerrada com sucesso! Cupom impresso em 'comprovantes_mesas/'. Troco: R$ ${result.change_given?.toFixed(2) || calculatedChange.toFixed(2)}.`
       });
 
       setSelectedTable(null);
@@ -170,9 +201,141 @@ export const CashierScreen: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
       
-      {/* Modal de Simulação de Impressão Térmica de Cupom Fiscal .TXT */}
+      {/* 🔍 MODAL DE CONFIRMAÇÃO & VERIFICAÇÃO DE SEGURANÇA ANTES DO FECHAMENTO */}
+      {showVerifyModal && selectedTable && bill && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1100,
+          backdropFilter: 'blur(5px)'
+        }}>
+          <div className="clean-card animate-fade-in" style={{
+            background: '#FFFFFF',
+            borderRadius: 'var(--radius-md)',
+            width: '640px',
+            maxWidth: '95%',
+            padding: '24px',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '18px',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            {/* Header do Modal */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ShieldCheck size={26} color="var(--accent-emerald)" />
+                <div>
+                  <h2 style={{ fontSize: '1.2rem' }}>Conferência da Mesa {selectedTable.number}</h2>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Verifique os itens e horários lançados antes de concluir o fechamento
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setShowVerifyModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={20} color="var(--text-muted)" />
+              </button>
+            </div>
+
+            {/* Linha do Tempo de Pedidos por Horário */}
+            <div>
+              <h3 style={{ fontSize: '0.9rem', marginBottom: '10px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Clock size={16} /> Horário dos Pedidos Lançados nesta Mesa:
+              </h3>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--bg-subtle)', padding: '14px', borderRadius: 'var(--radius-sm)' }}>
+                {bill.orders?.map((ord: any, idx: number) => (
+                  <div key={ord.id} style={{ background: '#FFFFFF', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', fontWeight: 700, borderBottom: '1px solid var(--border-light)', paddingBottom: '6px', marginBottom: '8px' }}>
+                      <span style={{ color: 'var(--accent-blue)' }}>
+                        🕒 Pedido #{idx + 1} às {new Date(ord.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)' }}>Garçom: {ord.waiter_name || 'Equipe'}</span>
+                    </div>
+
+                    {/* Itens deste pedido com opção de correção */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {ord.items?.map((it: any) => (
+                        <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+                          <div>
+                            <span style={{ fontWeight: 700 }}>{it.quantity}x {it.menu_item_name}</span>
+                            {it.notes && <span style={{ fontSize: '0.72rem', color: '#B45309', marginLeft: '6px' }}>(Obs: {it.notes})</span>}
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontWeight: 800 }}>R$ {it.total_price.toFixed(2)}</span>
+                            {/* Botões para corrigir no modal */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <button onClick={() => handleUpdateQuantity(it.id, it.quantity - 1)} style={{ background: 'none', border: '1px solid var(--border-light)', borderRadius: '4px', cursor: 'pointer', padding: '2px 4px' }}>
+                                <Minus size={12} />
+                              </button>
+                              <button onClick={() => handleUpdateQuantity(it.id, it.quantity + 1)} style={{ background: 'none', border: '1px solid var(--border-light)', borderRadius: '4px', cursor: 'pointer', padding: '2px 4px' }}>
+                                <Plus size={12} />
+                              </button>
+                              <button onClick={() => handleDeleteItem(it.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px 4px' }}>
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Resumo Final do Pagamento Selecionado */}
+            <div style={{ background: 'var(--accent-emerald-light)', padding: '14px', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '0.8rem', color: '#065F46', fontWeight: 600 }}>Forma de Pagamento:</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#065F46' }}>
+                  {!isSplitMode ? methodLabels[singleMethod] : 'Dividido / Múltiplas Formas'}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.8rem', color: '#065F46', fontWeight: 600 }}>Total Final:</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#065F46' }}>
+                  R$ {numericTotal.toFixed(2)}
+                </div>
+              </div>
+            </div>
+
+            {/* Ações do Modal */}
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <button
+                onClick={() => setShowVerifyModal(false)}
+                className="btn btn-outline"
+                style={{ flex: 1, padding: '12px' }}
+              >
+                <Edit3 size={16} /> Voltar e Corrigir
+              </button>
+              <button
+                onClick={handleFinalProcessPayment}
+                disabled={loading}
+                className="btn btn-success"
+                style={{ flex: 2, padding: '12px', fontSize: '1rem' }}
+              >
+                <CheckCircle2 size={18} />
+                {loading ? 'Encerrando...' : 'CONFIRMAR E EMITIR CUPOM'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Simulação de Impressão Térmica do Cupom .TXT */}
       {receiptText && (
         <div style={{
           position: 'fixed',
@@ -184,7 +347,7 @@ export const CashierScreen: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
+          zIndex: 1200,
           backdropFilter: 'blur(4px)'
         }}>
           <div style={{
@@ -236,17 +399,18 @@ export const CashierScreen: React.FC = () => {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 480px', gap: '24px' }}>
+      {/* Grid Principal do Caixa */}
+      <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 480px', gap: '20px' }}>
         
         {/* Painel Esquerdo: Lista de Mesas para Fechamento */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* Header & Status */}
-          <div className="clean-card" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="clean-card" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h1 style={{ fontSize: '1.25rem' }}>Caixa Central (POS)</h1>
               <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                Selecione uma mesa ocupada para visualizar o extrato e encerrar a conta
+                Selecione uma mesa ocupada para conferir o extrato e encerrar a conta
               </p>
             </div>
 
@@ -261,7 +425,7 @@ export const CashierScreen: React.FC = () => {
 
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
               gap: '12px'
             }}>
               {tables.map(t => {
@@ -287,7 +451,7 @@ export const CashierScreen: React.FC = () => {
                       background: bg,
                       border: `2px solid ${border}`,
                       borderRadius: 'var(--radius-md)',
-                      padding: '16px 12px',
+                      padding: '14px 10px',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
@@ -310,14 +474,54 @@ export const CashierScreen: React.FC = () => {
 
         {/* Painel Direito: Extrato & Calculadora de Pagamento Fracionado/Único */}
         <div className="clean-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
-            <Receipt size={22} color="var(--accent-blue)" />
-            <div>
-              <h2 style={{ fontSize: '1.1rem' }}>Extrato de Consumo</h2>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                {selectedTable ? `Fechamento de Conta - ${selectedTable.name}` : 'Selecione uma mesa ao lado'}
-              </span>
+          
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Receipt size={22} color="var(--accent-blue)" />
+              <div>
+                <h2 style={{ fontSize: '1.1rem' }}>Extrato de Consumo</h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {selectedTable ? `Fechamento de Conta - ${selectedTable.name}` : 'Selecione uma mesa ao lado'}
+                </span>
+              </div>
             </div>
+
+            {/* Alternar Modo de Visualização do Extrato */}
+            {selectedTable && bill && (
+              <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-subtle)', padding: '2px', borderRadius: 'var(--radius-sm)' }}>
+                <button
+                  onClick={() => setViewMode('ITEMS')}
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: viewMode === 'ITEMS' ? '#FFFFFF' : 'transparent',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Itens
+                </button>
+                <button
+                  onClick={() => setViewMode('TIMELINE')}
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: viewMode === 'TIMELINE' ? '#FFFFFF' : 'transparent',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Clock size={12} /> Horários
+                </button>
+              </div>
+            )}
           </div>
 
           {feedback && (
@@ -342,17 +546,37 @@ export const CashierScreen: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Itens do Extrato */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                {bill.items_summary?.map((item: any) => (
-                  <div key={item.menu_item_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}>
-                    <div>
-                      <span style={{ fontWeight: 700 }}>{item.quantity}x {item.name}</span>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>R$ {item.unit_price.toFixed(2)} un</div>
+              {/* EXIBIÇÃO DE ITENS COM POSSIBILIDADE DE CORREÇÃO/EXCLUSÃO */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+                
+                {viewMode === 'ITEMS' ? (
+                  /* VISÃO AGRUPADA DE ITENS */
+                  bill.items_summary?.map((item: any) => (
+                    <div key={item.menu_item_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}>
+                      <div>
+                        <span style={{ fontWeight: 700 }}>{item.quantity}x {item.name}</span>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>R$ {item.unit_price.toFixed(2)} un</div>
+                      </div>
+                      <span style={{ fontWeight: 800 }}>R$ {item.total_price.toFixed(2)}</span>
                     </div>
-                    <span style={{ fontWeight: 800 }}>R$ {item.total_price.toFixed(2)}</span>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  /* VISÃO CRONOLÓGICA DE PEDIDOS POR HORÁRIO */
+                  bill.orders?.map((ord: any, idx: number) => (
+                    <div key={ord.id} style={{ background: 'var(--bg-subtle)', padding: '10px', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent-blue)', borderBottom: '1px solid var(--border-light)', paddingBottom: '4px' }}>
+                        <span>🕒 Pedido #{idx + 1} ({new Date(ord.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})</span>
+                        <span style={{ color: 'var(--text-muted)' }}>Garçom: {ord.waiter_name || 'Equipe'}</span>
+                      </div>
+                      {ord.items?.map((it: any) => (
+                        <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                          <span>{it.quantity}x {it.menu_item_name}</span>
+                          <span style={{ fontWeight: 700 }}>R$ {it.total_price.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
               </div>
 
               {/* Total da Conta */}
@@ -628,8 +852,9 @@ export const CashierScreen: React.FC = () => {
                 </div>
               )}
 
+              {/* BOTÃO DE VERIFICAÇÃO ANTES DE PROCESSAR */}
               <button
-                onClick={handleProcessPayment}
+                onClick={() => setShowVerifyModal(true)}
                 disabled={loading || (isSplitMode && remainingToAllocate > 0.01)}
                 className="btn btn-success"
                 style={{
@@ -641,12 +866,12 @@ export const CashierScreen: React.FC = () => {
                   cursor: (isSplitMode && remainingToAllocate > 0.01) ? 'not-allowed' : 'pointer'
                 }}
               >
-                <CheckCircle2 size={18} />
+                <ShieldCheck size={18} />
                 {loading
                   ? 'Processando...'
                   : isSplitMode
-                  ? (remainingToAllocate > 0.01 ? `Faltam R$ ${remainingToAllocate.toFixed(2)}` : 'Finalizar Pagamento Fracionado')
-                  : `Finalizar Pagamento (${methodLabels[singleMethod]})`}
+                  ? (remainingToAllocate > 0.01 ? `Faltam R$ ${remainingToAllocate.toFixed(2)}` : 'Conferir e Fechar Mesa')
+                  : 'Conferir e Fechar Mesa'}
               </button>
             </>
           )}

@@ -16,6 +16,10 @@ export const createOrderSchema = z.object({
   offline_sync_id: z.string().optional()
 });
 
+export const updateQuantitySchema = z.object({
+  quantity: z.number().int().min(0)
+});
+
 export const syncBatchOrdersSchema = z.object({
   batch: z.array(
     z.object({
@@ -52,6 +56,27 @@ export class OrderController {
       const { batch } = req.body;
 
       const result = OrderService.syncOfflineBatch(waiterId, batch);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async deleteItem(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const itemId = req.params.itemId as string;
+      const result = OrderService.deleteItemFromOrder(itemId);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  static async updateItemQuantity(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const itemId = req.params.itemId as string;
+      const { quantity } = req.body;
+      const result = OrderService.updateItemQuantity(itemId, quantity);
       res.json(result);
     } catch (err) {
       next(err);

@@ -241,6 +241,50 @@ export class OrderRepository {
     return this.findById(orderId);
   }
 
+  static deleteOrderItem(itemId: string): { success: boolean; table_id?: string } {
+    const item = db.prepare('SELECT * FROM order_items WHERE id = ?').get(itemId) as OrderItem | undefined;
+    if (!item) return { success: false };
+
+    const orderId = item.order_id;
+    const order = this.findById(orderId);
+    if (!order) return { success: false };
+
+    db.prepare('DELETE FROM order_items WHERE id = ?').run(itemId);
+
+    const newTotalObj = db.prepare('SELECT SUM(total_price) as total FROM order_items WHERE order_id = ?').get(orderId) as { total: number | null };
+    const newTotal = newTotalObj.total || 0;
+
+    db.prepare('UPDATE orders SET total_amount = ? WHERE id = ?').run(newTotal, orderId);
+
+    const remainingItemsCount = (db.prepare('SELECT COUNT(*) as count FROM order_items WHERE order_id = ?').get(orderId) as { count: number }).count;
+    if (remainingItemsCount === 0) {
+      db.prepare("UPDATE orders SET status = 'CANCELLED' WHERE id = ?").run(orderId);
+    }
+
+    return { success: true, table_id: order.table_id };
+  }
+
+  static updateOrderItemQuantity(itemId: string, quantity: number): { success: boolean; table_id?: string } {
+    const item = db.prepare('SELECT * FROM order_items WHERE id = ?').get(itemId) as OrderItem | undefined;
+    if (!item) return { success: false };
+
+    if (quantity <= 0) {
+      return this.deleteOrderItem(itemId);
+    }
+
+    const newTotalPrice = Number((item.unit_price * quantity).toFixed(2));
+    db.prepare('UPDATE order_items SET quantity = ?, total_price = ? WHERE id = ?').run(quantity, newTotalPrice, itemId);
+
+    const orderId = item.order_id;
+    const newTotalObj = db.prepare('SELECT SUM(total_price) as total FROM order_items WHERE order_id = ?').get(orderId) as { total: number | null };
+    const newTotal = newTotalObj.total || 0;
+
+    db.prepare('UPDATE orders SET total_amount = ? WHERE id = ?').run(newTotal, orderId);
+
+    const order = this.findById(orderId);
+    return { success: true, table_id: order?.table_id };
+  }
+
   static getTableBill(tableId: string): TableBillSummary | null {
     const table = TableRepository.findById(tableId);
     if (!table) return null;
