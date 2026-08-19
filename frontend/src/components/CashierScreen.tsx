@@ -300,6 +300,27 @@ export const CashierScreen: React.FC = () => {
                   </button>
 
                   <button
+                    onClick={() => setPaymentMethod('CASH')}
+                    style={{
+                      padding: '10px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid',
+                      borderColor: paymentMethod === 'CASH' ? 'var(--accent-emerald)' : 'var(--border-light)',
+                      background: paymentMethod === 'CASH' ? 'var(--accent-emerald-light)' : '#FFFFFF',
+                      color: paymentMethod === 'CASH' ? 'var(--accent-emerald)' : 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <DollarSign size={16} /> Dinheiro
+                  </button>
+
+                  <button
                     onClick={() => setPaymentMethod('CREDIT_CARD')}
                     style={{
                       padding: '10px',
@@ -317,29 +338,28 @@ export const CashierScreen: React.FC = () => {
                       cursor: 'pointer'
                     }}
                   >
-                    <CreditCard size={16} /> Cartão
+                    <CreditCard size={16} /> Cartão Crédito
                   </button>
 
                   <button
-                    onClick={() => setPaymentMethod('CASH')}
+                    onClick={() => setPaymentMethod('DEBIT_CARD')}
                     style={{
                       padding: '10px',
                       borderRadius: 'var(--radius-sm)',
                       border: '1px solid',
-                      borderColor: paymentMethod === 'CASH' ? 'var(--accent-emerald)' : 'var(--border-light)',
-                      background: paymentMethod === 'CASH' ? 'var(--accent-emerald-light)' : '#FFFFFF',
-                      color: paymentMethod === 'CASH' ? 'var(--accent-emerald)' : 'var(--text-secondary)',
+                      borderColor: paymentMethod === 'DEBIT_CARD' ? 'var(--accent-blue)' : 'var(--border-light)',
+                      background: paymentMethod === 'DEBIT_CARD' ? 'var(--accent-blue-light)' : '#FFFFFF',
+                      color: paymentMethod === 'DEBIT_CARD' ? 'var(--accent-blue)' : 'var(--text-secondary)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
                       fontSize: '0.85rem',
                       fontWeight: 700,
-                      cursor: 'pointer',
-                      gridColumn: 'span 2'
+                      cursor: 'pointer'
                     }}
                   >
-                    <DollarSign size={16} /> Dinheiro (Com Cálculo de Troco)
+                    <CreditCard size={16} /> Cartão Débito
                   </button>
                 </div>
               </div>
