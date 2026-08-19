@@ -59,7 +59,6 @@ export class CashierRepository {
   ): { payments: Payment[]; change_given: number; receipt_file: string; receipt_text: string } {
     let session = this.getActiveSession();
     if (!session) {
-      // Auto-abrir caixa do dia para não travar pagamentos se o caixa não foi aberto manualmente
       session = this.openSession(cashierUserId || 'u_caixa', 0);
     }
 
@@ -99,7 +98,6 @@ export class CashierRepository {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).run(paymentId, tableId, orderId, session!.id, p.method, paymentAmount, amountPaid, change);
 
-        // Atualizar estatísticas do caixa
         if (p.method === 'CASH') {
           db.prepare('UPDATE cashier_sessions SET total_sales = total_sales + ?, total_cash = total_cash + ? WHERE id = ?').run(paymentAmount, paymentAmount, session!.id);
         } else if (p.method === 'PIX') {
@@ -121,18 +119,15 @@ export class CashierRepository {
         });
       }
 
-      // Marcar todos os pedidos da mesa como FECHADOS (CLOSED)
       for (const order of tableBill.orders) {
         db.prepare("UPDATE orders SET status = 'CLOSED', updated_at = datetime('now', 'localtime') WHERE id = ?").run(order.id);
       }
 
-      // Liberar a mesa (FREE)
       TableRepository.updateStatus(tableId, 'FREE');
     });
 
     processTransaction();
 
-    // GERAR COMPROVANTE FISCAL EM ARQUIVO .TXT NA PASTA comprovantes_mesas/
     const receiptResult = generateReceiptTxt(tableBill, paymentsInput, totalChangeGiven, session.opened_by_name);
 
     return {
@@ -141,6 +136,55 @@ export class CashierRepository {
       receipt_file: receiptResult.filePath,
       receipt_text: receiptResult.receiptContent
     };
+  }
+
+  static getReceiptByOrderId(orderId: string): { receipt_text: string } {
+    const order = db.prepare(`
+      SELECT o.*, t.number as table_number, t.name as table_name, u.name as waiter_name
+      FROM orders o
+      JOIN tables t ON t.id = o.table_id
+      JOIN users u ON u.id = o.waiter_id
+      WHERE o.id = ?
+    `).get(orderId) as any;
+
+    if (!order) {
+      throw new Error('Pedido encerrado não encontrado.');
+    }
+
+    const items = db.prepare(`
+      SELECT oi.*, mi.name as menu_item_name
+      FROM order_items oi
+      JOIN menu_items mi ON mi.id = oi.menu_item_id
+      WHERE oi.order_id = ?
+    `).all(orderId) as any[];
+
+    const payments = db.prepare(`
+      SELECT * FROM payments WHERE order_id = ?
+    `).all(orderId) as any[];
+
+    const tableBill = {
+      table: { id: order.table_id, number: order.table_number, name: order.table_name, status: 'FREE' },
+      orders: [{ ...order, items }],
+      total_amount: order.total_amount,
+      items_summary: items.map(i => ({
+        menu_item_id: i.menu_item_id,
+        name: i.menu_item_name,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        total_price: i.total_price
+      }))
+    };
+
+    const paymentsInput = payments.map(p => ({
+      method: p.payment_method,
+      amount: p.amount,
+      amount_paid: p.amount_paid
+    }));
+
+    const totalChange = payments.reduce((acc, p) => acc + (p.change_given || 0), 0);
+
+    const receiptResult = generateReceiptTxt(tableBill as any, paymentsInput as any, totalChange, 'Operador Caixa');
+    return { receipt_text: receiptResult.receiptContent };
   }
 
   static getDailyReport(dateStr?: string): DailyReport {

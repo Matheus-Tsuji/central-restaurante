@@ -39,6 +39,10 @@ export class CashierService {
     };
   }
 
+  static reprintReceipt(orderId: string): { receipt_text: string } {
+    return CashierRepository.getReceiptByOrderId(orderId);
+  }
+
   static getDailyReport(dateStr?: string): DailyReport {
     return CashierRepository.getDailyReport(dateStr);
   }

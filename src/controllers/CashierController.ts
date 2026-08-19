@@ -67,6 +67,16 @@ export class CashierController {
     }
   }
 
+  static async reprintReceipt(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const orderId = req.params.orderId as string;
+      const result = CashierService.reprintReceipt(orderId);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getDailyReport(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const dateStr = req.query.date as string | undefined;

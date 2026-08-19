@@ -155,6 +155,10 @@ export const api = {
     }, 5000);
   },
 
+  async reprintReceipt(orderId: string): Promise<{ receipt_text: string }> {
+    return await fetchWithTimeout(`/cashier/receipt/order/${orderId}`);
+  },
+
   async getDailyReport(): Promise<DailyReport> {
     try {
       return await fetchWithTimeout('/cashier/report');

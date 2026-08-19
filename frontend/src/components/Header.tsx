@@ -25,26 +25,27 @@ export const Header: React.FC<HeaderProps> = ({
       position: 'sticky',
       top: 0,
       zIndex: 100,
-      boxShadow: 'var(--shadow-sm)'
+      boxShadow: 'var(--shadow-sm)',
+      width: '100%'
     }}>
       <div style={{
         maxWidth: '1400px',
         margin: '0 auto',
-        padding: '12px 24px',
+        padding: '10px 16px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '16px'
+        gap: '12px'
       }}>
         {/* Brand / Logo */}
         <div 
           onClick={() => navigate('/garcom')}
-          style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
         >
           <div style={{
-            width: '42px',
-            height: '42px',
+            width: '38px',
+            height: '38px',
             borderRadius: 'var(--radius-md)',
             background: 'linear-gradient(135deg, var(--accent-emerald) 0%, var(--accent-blue) 100%)',
             display: 'flex',
@@ -52,28 +53,68 @@ export const Header: React.FC<HeaderProps> = ({
             justifyContent: 'center',
             color: '#FFFFFF',
             fontWeight: 800,
-            fontSize: '1.2rem',
+            fontSize: '1.1rem',
             boxShadow: '0 4px 12px rgba(5, 150, 105, 0.2)'
           }}>
             CR
           </div>
           <div>
-            <h1 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>
+            <h1 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>
               Central Restaurante
             </h1>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>
               Sistema Operacional Multi-telas
             </span>
           </div>
         </div>
 
-        {/* NAVEGAÇÃO POR ROTAS DEDICADAS */}
-        <nav style={{
+        {/* Status Conexão / Sync Badge no Topo em Telas Perto da Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {offlineCount > 0 && (
+            <button
+              onClick={onSyncOffline}
+              className="btn btn-outline"
+              style={{
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                borderColor: '#F59E0B',
+                color: '#B45309',
+                background: '#FEF3C7',
+                minHeight: '34px'
+              }}
+              title="Clique para sincronizar pedidos pendentes do IndexedDB"
+            >
+              <RefreshCw size={13} />
+              Sync ({offlineCount})
+            </button>
+          )}
+
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 10px',
+            borderRadius: 'var(--radius-full)',
+            background: isOnline ? 'var(--accent-emerald-light)' : '#FEE2E2',
+            color: isOnline ? 'var(--accent-emerald)' : '#991B1B',
+            fontSize: '0.75rem',
+            fontWeight: 700
+          }}>
+            {isOnline ? <Wifi size={13} /> : <WifiOff size={13} />}
+            {isOnline ? 'Online' : 'Offline'}
+          </div>
+        </div>
+
+        {/* NAVEGAÇÃO ROLÁVEL NO CELULAR (FULL MOBILE TOUCH BAR) */}
+        <nav className="nav-tabs-mobile" style={{
           display: 'flex',
           background: 'var(--bg-subtle)',
           padding: '4px',
           borderRadius: 'var(--radius-md)',
-          gap: '4px'
+          gap: '4px',
+          width: '100%',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch'
         }}>
           <button
             onClick={() => navigate('/garcom')}
@@ -83,11 +124,14 @@ export const Header: React.FC<HeaderProps> = ({
               color: currentPath.includes('/garcom') || currentPath === '/' ? 'var(--accent-blue)' : 'var(--text-secondary)',
               boxShadow: currentPath.includes('/garcom') || currentPath === '/' ? 'var(--shadow-sm)' : 'none',
               borderRadius: 'var(--radius-sm)',
-              padding: '8px 14px',
-              fontSize: '0.85rem'
+              padding: '8px 12px',
+              fontSize: '0.82rem',
+              whiteSpace: 'nowrap',
+              minHeight: '38px',
+              flex: 1
             }}
           >
-            <Utensils size={18} />
+            <Utensils size={16} />
             Garçom
           </button>
 
@@ -99,12 +143,15 @@ export const Header: React.FC<HeaderProps> = ({
               color: currentPath.includes('/cozinha') ? 'var(--accent-emerald)' : 'var(--text-secondary)',
               boxShadow: currentPath.includes('/cozinha') ? 'var(--shadow-sm)' : 'none',
               borderRadius: 'var(--radius-sm)',
-              padding: '8px 14px',
-              fontSize: '0.85rem'
+              padding: '8px 12px',
+              fontSize: '0.82rem',
+              whiteSpace: 'nowrap',
+              minHeight: '38px',
+              flex: 1
             }}
           >
-            <ChefHat size={18} />
-            Cozinha (KDS)
+            <ChefHat size={16} />
+            Cozinha
           </button>
 
           <button
@@ -115,12 +162,15 @@ export const Header: React.FC<HeaderProps> = ({
               color: currentPath.includes('/bar') ? '#0284C7' : 'var(--text-secondary)',
               boxShadow: currentPath.includes('/bar') ? 'var(--shadow-sm)' : 'none',
               borderRadius: 'var(--radius-sm)',
-              padding: '8px 14px',
-              fontSize: '0.85rem'
+              padding: '8px 12px',
+              fontSize: '0.82rem',
+              whiteSpace: 'nowrap',
+              minHeight: '38px',
+              flex: 1
             }}
           >
-            <GlassWater size={18} />
-            Bar (Bebidas)
+            <GlassWater size={16} />
+            Bar
           </button>
 
           <button
@@ -131,12 +181,15 @@ export const Header: React.FC<HeaderProps> = ({
               color: currentPath.includes('/caixa') ? 'var(--accent-blue)' : 'var(--text-secondary)',
               boxShadow: currentPath.includes('/caixa') ? 'var(--shadow-sm)' : 'none',
               borderRadius: 'var(--radius-sm)',
-              padding: '8px 14px',
-              fontSize: '0.85rem'
+              padding: '8px 12px',
+              fontSize: '0.82rem',
+              whiteSpace: 'nowrap',
+              minHeight: '38px',
+              flex: 1
             }}
           >
-            <Receipt size={18} />
-            Caixa / POS
+            <Receipt size={16} />
+            Caixa
           </button>
 
           <button
@@ -147,50 +200,17 @@ export const Header: React.FC<HeaderProps> = ({
               color: currentPath.includes('/relatorios') ? 'var(--accent-emerald)' : 'var(--text-secondary)',
               boxShadow: currentPath.includes('/relatorios') ? 'var(--shadow-sm)' : 'none',
               borderRadius: 'var(--radius-sm)',
-              padding: '8px 14px',
-              fontSize: '0.85rem'
+              padding: '8px 12px',
+              fontSize: '0.82rem',
+              whiteSpace: 'nowrap',
+              minHeight: '38px',
+              flex: 1
             }}
           >
-            <BarChart3 size={18} />
-            Relatórios & Estoque
+            <BarChart3 size={16} />
+            Relatórios
           </button>
         </nav>
-
-        {/* Status Conexão / Sync Badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {offlineCount > 0 && (
-            <button
-              onClick={onSyncOffline}
-              className="btn btn-outline"
-              style={{
-                padding: '6px 12px',
-                fontSize: '0.78rem',
-                borderColor: '#F59E0B',
-                color: '#B45309',
-                background: '#FEF3C7'
-              }}
-              title="Clique para sincronizar pedidos pendentes do IndexedDB"
-            >
-              <RefreshCw size={14} />
-              Sync Offline ({offlineCount})
-            </button>
-          )}
-
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 12px',
-            borderRadius: 'var(--radius-full)',
-            background: isOnline ? 'var(--accent-emerald-light)' : '#FEE2E2',
-            color: isOnline ? 'var(--accent-emerald)' : '#991B1B',
-            fontSize: '0.8rem',
-            fontWeight: 600
-          }}>
-            {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
-            {isOnline ? 'Online' : 'Modo Offline'}
-          </div>
-        </div>
       </div>
     </header>
   );
