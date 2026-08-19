@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Table } from '../types';
 import { api } from '../services/api';
-import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw, Printer, X } from 'lucide-react';
 
 export const CashierScreen: React.FC = () => {
   const [tables, setTables] = useState<Table[]>([]);
@@ -11,6 +11,7 @@ export const CashierScreen: React.FC = () => {
   const [amountPaid, setAmountPaid] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [receiptText, setReceiptText] = useState<string | null>(null);
 
   useEffect(() => {
     loadTables();
@@ -57,9 +58,13 @@ export const CashierScreen: React.FC = () => {
         }
       ]);
 
+      if (result.receipt_text) {
+        setReceiptText(result.receipt_text);
+      }
+
       setFeedback({
         type: 'success',
-        message: `Pagamento de R$ ${numericTotal.toFixed(2)} recebido com sucesso! Troco: R$ ${result.change_given?.toFixed(2) || changeGiven.toFixed(2)}.`
+        message: `Pagamento recebido com sucesso! Cupom salvo na pasta 'comprovantes_mesas/'. Troco: R$ ${result.change_given?.toFixed(2) || changeGiven.toFixed(2)}.`
       });
 
       setSelectedTable(null);
@@ -74,6 +79,71 @@ export const CashierScreen: React.FC = () => {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+      
+      {/* Modal de Simulação de Impressão Térmica de Cupom Fiscal .TXT */}
+      {receiptText && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: 'var(--radius-md)',
+            width: '460px',
+            maxWidth: '90%',
+            padding: '24px',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', paddingBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Printer size={20} color="var(--accent-blue)" />
+                <h3 style={{ fontSize: '1.1rem' }}>Cupom de Consumo Emitido</h3>
+              </div>
+              <button onClick={() => setReceiptText(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={20} color="var(--text-muted)" />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.8rem', color: 'var(--accent-emerald)', fontWeight: 600 }}>
+              📄 Salvo automaticamente em formato .TXT na pasta <code>comprovantes_mesas/</code> do projeto!
+            </p>
+
+            <pre style={{
+              background: '#1E293B',
+              color: '#F8FAFC',
+              padding: '16px',
+              borderRadius: 'var(--radius-sm)',
+              fontFamily: 'monospace',
+              fontSize: '0.75rem',
+              maxHeight: '340px',
+              overflowY: 'auto',
+              whiteSpace: 'pre-wrap',
+              lineHeight: '1.4'
+            }}>
+              {receiptText}
+            </pre>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={() => setReceiptText(null)} className="btn btn-primary" style={{ width: '100%' }}>
+                Fechar Cupom
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 440px', gap: '24px' }}>
         
         {/* Painel Esquerdo: Lista de Mesas para Fechamento */}
@@ -307,7 +377,7 @@ export const CashierScreen: React.FC = () => {
                 style={{ width: '100%', padding: '12px', fontSize: '1rem', marginTop: '8px' }}
               >
                 <CheckCircle2 size={18} />
-                {loading ? 'Processando...' : 'Finalizar Pagamento e Liberar Mesa'}
+                {loading ? 'Processando...' : 'Finalizar Pagamento e Emitir Cupom'}
               </button>
             </>
           )}

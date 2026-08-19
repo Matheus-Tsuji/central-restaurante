@@ -20,7 +20,7 @@ export class CashierService {
     tableId: string,
     cashierUserId: string,
     payments: { method: PaymentMethod; amount: number; amount_paid?: number }[]
-  ): { success: boolean; change_given: number; message: string } {
+  ): { success: boolean; change_given: number; message: string; receipt_file: string; receipt_text: string } {
     const result = CashierRepository.processPayment(tableId, payments, cashierUserId);
 
     const updatedTable = TableRepository.findById(tableId);
@@ -33,7 +33,9 @@ export class CashierService {
     return {
       success: true,
       change_given: result.change_given,
-      message: `Pagamento processado com sucesso. Troco a devolver: R$ ${result.change_given.toFixed(2)}.`
+      message: `Pagamento processado com sucesso. Troco a devolver: R$ ${result.change_given.toFixed(2)}. Cupom salvo em ${result.receipt_file}`,
+      receipt_file: result.receipt_file,
+      receipt_text: result.receipt_text
     };
   }
 

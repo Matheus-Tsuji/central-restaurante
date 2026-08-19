@@ -1,8 +1,9 @@
 import { db } from '../config/database.js';
-import { CashRegisterSession, Payment, PaymentMethod, DailyReport, InventoryItem } from '../models/types.js';
+import { CashRegisterSession, Payment, PaymentMethod, DailyReport } from '../models/types.js';
 import { TableRepository } from './TableRepository.js';
 import { OrderRepository } from './OrderRepository.js';
 import { InventoryRepository } from './InventoryRepository.js';
+import { generateReceiptTxt } from '../utils/receiptGenerator.js';
 import { randomUUID } from 'node:crypto';
 
 export class CashierRepository {
@@ -23,7 +24,7 @@ export class CashierRepository {
   static openSession(userId: string, initialBalance: number): CashRegisterSession {
     const active = this.getActiveSession();
     if (active) {
-      throw new Error('Já existe um caixa aberto! Feche o caixa atual antes de abrir outro.');
+      return active;
     }
 
     const id = randomUUID();
@@ -55,10 +56,11 @@ export class CashierRepository {
     tableId: string,
     paymentsInput: { method: PaymentMethod; amount: number; amount_paid?: number }[],
     cashierUserId: string
-  ): { payments: Payment[]; change_given: number } {
-    const session = this.getActiveSession();
+  ): { payments: Payment[]; change_given: number; receipt_file: string; receipt_text: string } {
+    let session = this.getActiveSession();
     if (!session) {
-      throw new Error('Não há caixa aberto no momento para processar pagamentos.');
+      // Auto-abrir caixa do dia para não travar pagamentos se o caixa não foi aberto manualmente
+      session = this.openSession(cashierUserId || 'u_caixa', 0);
     }
 
     const tableBill = OrderRepository.getTableBill(tableId);
@@ -90,28 +92,27 @@ export class CashierRepository {
         remainingBill -= paymentAmount;
 
         const paymentId = randomUUID();
-        // Atribuir ao primeiro pedido aberto da mesa para rastreabilidade
         const orderId = tableBill.orders[0]!.id;
 
         db.prepare(`
           INSERT INTO payments (id, table_id, order_id, cashier_session_id, payment_method, amount, amount_paid, change_given)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(paymentId, tableId, orderId, session.id, p.method, paymentAmount, amountPaid, change);
+        `).run(paymentId, tableId, orderId, session!.id, p.method, paymentAmount, amountPaid, change);
 
         // Atualizar estatísticas do caixa
         if (p.method === 'CASH') {
-          db.prepare('UPDATE cashier_sessions SET total_sales = total_sales + ?, total_cash = total_cash + ? WHERE id = ?').run(paymentAmount, paymentAmount, session.id);
+          db.prepare('UPDATE cashier_sessions SET total_sales = total_sales + ?, total_cash = total_cash + ? WHERE id = ?').run(paymentAmount, paymentAmount, session!.id);
         } else if (p.method === 'PIX') {
-          db.prepare('UPDATE cashier_sessions SET total_sales = total_sales + ?, total_pix = total_pix + ? WHERE id = ?').run(paymentAmount, paymentAmount, session.id);
+          db.prepare('UPDATE cashier_sessions SET total_sales = total_sales + ?, total_pix = total_pix + ? WHERE id = ?').run(paymentAmount, paymentAmount, session!.id);
         } else {
-          db.prepare('UPDATE cashier_sessions SET total_sales = total_sales + ?, total_card = total_card + ? WHERE id = ?').run(paymentAmount, paymentAmount, session.id);
+          db.prepare('UPDATE cashier_sessions SET total_sales = total_sales + ?, total_card = total_card + ? WHERE id = ?').run(paymentAmount, paymentAmount, session!.id);
         }
 
         createdPayments.push({
           id: paymentId,
           table_id: tableId,
           order_id: orderId,
-          cashier_session_id: session.id,
+          cashier_session_id: session!.id,
           payment_method: p.method,
           amount: paymentAmount,
           amount_paid: amountPaid,
@@ -131,11 +132,18 @@ export class CashierRepository {
 
     processTransaction();
 
-    return { payments: createdPayments, change_given: totalChangeGiven };
+    // GERAR COMPROVANTE FISCAL EM ARQUIVO .TXT NA PASTA comprovantes_mesas/
+    const receiptResult = generateReceiptTxt(tableBill, paymentsInput, totalChangeGiven, session.opened_by_name);
+
+    return {
+      payments: createdPayments,
+      change_given: totalChangeGiven,
+      receipt_file: receiptResult.filePath,
+      receipt_text: receiptResult.receiptContent
+    };
   }
 
   static getDailyReport(dateStr?: string): DailyReport {
-    // Se data não for especificada, usa a data atual YYYY-MM-DD
     const targetDate = dateStr || new Date().toISOString().split('T')[0]!;
 
     const session = db.prepare(`
@@ -148,7 +156,6 @@ export class CashierRepository {
       LIMIT 1
     `).get(targetDate) as CashRegisterSession | undefined;
 
-    // Métodos de pagamento
     const paymentTotals = db.prepare(`
       SELECT payment_method, SUM(amount) as total
       FROM payments
@@ -171,7 +178,6 @@ export class CashierRepository {
       }
     }
 
-    // Pedidos encerrados no dia
     const closedOrders = db.prepare(`
       SELECT o.id as order_id, o.total_amount, o.updated_at as closed_at, t.number as table_number, u.name as waiter_name
       FROM orders o
