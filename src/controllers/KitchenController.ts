@@ -8,7 +8,7 @@ export const updateItemStatusSchema = z.object({
 
 export const updateBatchStatusSchema = z.object({
   status: z.enum(['PENDING', 'PREPARING', 'READY', 'DELIVERED', 'CANCELLED']),
-  filterType: z.enum(['FOOD', 'DRINK']).optional()
+  filterType: z.enum(['FOOD', 'DRINK', 'BAR']).optional()
 });
 
 export class KitchenController {

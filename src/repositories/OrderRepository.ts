@@ -205,14 +205,14 @@ export class OrderRepository {
   }
 
   // Atualização em lote de todos os itens de um pedido com 1 único clique no card
-  static updateOrderItemsStatusBatch(orderId: string, status: OrderItemStatus, filterType?: 'FOOD' | 'DRINK'): Order | null {
+  static updateOrderItemsStatusBatch(orderId: string, status: OrderItemStatus, filterType?: 'FOOD' | 'DRINK' | 'BAR'): Order | null {
     if (filterType === 'FOOD') {
       db.prepare(`
         UPDATE order_items
         SET status = ?
         WHERE order_id = ? AND menu_item_id IN (SELECT id FROM menu_items WHERE category != 'Bebidas')
       `).run(status, orderId);
-    } else if (filterType === 'DRINK') {
+    } else if (filterType === 'DRINK' || filterType === 'BAR') {
       db.prepare(`
         UPDATE order_items
         SET status = ?

@@ -39,8 +39,9 @@ export class KitchenService {
     return updatedOrder;
   }
 
-  static updateOrderBatchStatus(orderId: string, status: OrderItemStatus, filterType?: 'FOOD' | 'DRINK'): Order {
-    const updatedOrder = OrderRepository.updateOrderItemsStatusBatch(orderId, status, filterType);
+  static updateOrderBatchStatus(orderId: string, status: OrderItemStatus, filterType?: 'FOOD' | 'DRINK' | 'BAR'): Order {
+    const mappedType = filterType === 'BAR' ? 'DRINK' : filterType;
+    const updatedOrder = OrderRepository.updateOrderItemsStatusBatch(orderId, status, mappedType);
     if (!updatedOrder) {
       throw new Error('Pedido não encontrado.');
     }
