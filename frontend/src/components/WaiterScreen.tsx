@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, MenuItem } from '../types';
+import type { Table, MenuItem } from '../types';
 import { api } from '../services/api';
 import { offlineDb } from '../services/offlineDb';
 import { ShoppingBag, Plus, Minus, Send, CheckCircle2, AlertCircle, Search } from 'lucide-react';

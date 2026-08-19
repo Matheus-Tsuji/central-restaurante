@@ -1,4 +1,5 @@
-import Dexie, { Table as DexieTable } from 'dexie';
+import Dexie from 'dexie';
+import type { Table as DexieTable } from 'dexie';
 
 export interface OfflineOrder {
   id?: number;

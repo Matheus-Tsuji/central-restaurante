@@ -1,4 +1,4 @@
-import { Table, MenuItem, Order, InventoryItem, CashSession, DailyReport } from '../types';
+import type { Table, MenuItem, Order, InventoryItem, CashSession, DailyReport } from '../types';
 
 const API_BASE = 'http://localhost:3000/api';
 

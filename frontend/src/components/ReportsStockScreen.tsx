@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DailyReport, InventoryItem } from '../types';
+import type { DailyReport, InventoryItem } from '../types';
 import { api } from '../services/api';
 import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award } from 'lucide-react';
 

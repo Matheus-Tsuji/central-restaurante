@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table } from '../types';
+import type { Table } from '../types';
 import { api } from '../services/api';
 import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 
