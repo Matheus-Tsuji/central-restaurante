@@ -1,6 +1,9 @@
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:3000';
+// Conecta dinamicamente ao IP do servidor onde a aplicação está rodando na rede
+const SOCKET_URL = typeof window !== 'undefined'
+  ? `${window.location.protocol}//${window.location.hostname}:3000`
+  : 'http://localhost:3000';
 
 let socketInstance: Socket | null = null;
 
@@ -9,8 +12,8 @@ try {
     autoConnect: true,
     reconnection: true,
     reconnectionDelay: 1000,
-    reconnectionAttempts: 5,
-    timeout: 3000
+    reconnectionAttempts: 10,
+    timeout: 5000
   });
 } catch (e) {
   console.warn('Socket.IO não pôde ser inicializado de imediato:', e);

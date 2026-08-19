@@ -17,7 +17,7 @@ const httpServer = createServer(app);
 initSocketIO(httpServer);
 
 // Middlewares globais
-app.use(cors());
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 // Rota de Healthcheck
@@ -36,9 +36,9 @@ app.use('/api', apiRoutes);
 // Middleware central de tratamento de erros
 app.use(errorHandler);
 
-const PORT = env.PORT;
+const PORT = Number(env.PORT) || 3000;
 
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Servidor Central rodando com sucesso em http://localhost:${PORT}`);
-  console.log(`📡 WebSocket Socket.IO pronto para conexões em tempo real.`);
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Servidor Central rodando em http://localhost:${PORT} e http://192.168.0.172:${PORT}`);
+  console.log(`📡 WebSocket Socket.IO pronto para conexões na rede local.`);
 });
