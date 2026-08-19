@@ -269,10 +269,15 @@ export class CashierRepository {
 
     const inventory_alerts = InventoryRepository.findLowStock();
 
+    const total_sales_subtotal = closedOrders.reduce((acc, o) => acc + (o.total_amount || 0), 0);
+    const total_sales_tips = Math.max(0, Number((total_sales - total_sales_subtotal).toFixed(2)));
+
     return {
       date: targetDate,
       cashier_session: session || null,
       total_sales: Number(total_sales.toFixed(2)),
+      total_sales_subtotal: Number(total_sales_subtotal.toFixed(2)),
+      total_sales_tips: Number(total_sales_tips.toFixed(2)),
       total_orders_closed: closedOrders.length,
       by_payment_method,
       table_orders_detail,

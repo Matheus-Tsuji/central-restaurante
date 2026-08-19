@@ -133,7 +133,9 @@ export interface TableBillSummary {
 export interface DailyReport {
   date: string;
   cashier_session: CashRegisterSession | null;
-  total_sales: number;
+  total_sales: number; // Faturamento Total Geral (Bruto Consumo + 10%)
+  total_sales_subtotal: number; // Total Só sem os 10% (Consumo Pratos e Bebidas)
+  total_sales_tips: number; // Total Só 10% (Arrecadação de Taxas de Serviço do Garçom)
   total_orders_closed: number;
   by_payment_method: {
     CASH: number;

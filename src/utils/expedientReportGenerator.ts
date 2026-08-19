@@ -43,7 +43,7 @@ export function generateExpedientReportTxt(expedientData: {
       const mNum = String(ord.table_number).padStart(2, '0');
       const waiter = (ord.waiter_name || 'Garçom').padEnd(15, ' ');
       const totalStr = `R$ ${ord.total_amount.toFixed(2)}`.padStart(10, ' ');
-      tableDetailLines += `• Mesa ${mNum} | Garçom: ${waiter} | Fechado em: ${ord.closed_at} | Total: ${totalStr}\n`;
+      tableDetailLines += `• Mesa ${mNum} | Garçom: ${waiter} | Fechado em: ${ord.closed_at} | Subtotal: ${totalStr}\n`;
       if (ord.items && ord.items.length > 0) {
         ord.items.forEach((it: any) => {
           tableDetailLines += `   - ${it.quantity}x ${it.name} (R$ ${it.total_price.toFixed(2)})\n`;
@@ -62,9 +62,12 @@ Data do Expediente: ${dateFormatted}
 Horário do Encerramento: ${timeFormatted}
 ================================================----------------------
 
-1. RESUMO FINANCEIRO DIÁRIO
+1. RESUMO FINANCEIRO E TAXAS DE SERVIÇO (10%)
 ----------------------------------------------------------------------
-Faturamento Total Bruto: R$ ${report.total_sales?.toFixed(2) || '0.00'}
+💰 FATURAMENTO TOTAL GERAL (COM 10%):  R$ ${report.total_sales?.toFixed(2) || '0.00'}
+🍽️ TOTAL SÓ SEM OS 10% (CONSUMO):     R$ ${report.total_sales_subtotal?.toFixed(2) || '0.00'}
+🎯 TOTAL SÓ OS 10% (TAXA DE SERVIÇO):   R$ ${report.total_sales_tips?.toFixed(2) || '0.00'}
+----------------------------------------------------------------------
 Total de Pedidos Encerrados: ${report.total_orders_closed || 0} mesa(s)
 
 VENDAS POR FORMA DE PAGAMENTO:

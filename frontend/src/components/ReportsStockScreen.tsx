@@ -3,7 +3,7 @@ import type { DailyReport, InventoryItem } from '../types';
 import { api } from '../services/api';
 import { socket } from '../services/socket';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateUtils';
-import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard, FileText, Download } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard, FileText, Percent, ShoppingBag } from 'lucide-react';
 
 export const ReportsStockScreen: React.FC = () => {
   const [report, setReport] = useState<DailyReport | null>(null);
@@ -105,7 +105,7 @@ export const ReportsStockScreen: React.FC = () => {
           <div className="clean-card animate-fade-in modal-container" style={{
             background: '#FFFFFF',
             borderRadius: 'var(--radius-md)',
-            width: '520px',
+            width: '540px',
             maxWidth: '94%',
             padding: '24px',
             boxShadow: 'var(--shadow-lg)',
@@ -126,7 +126,7 @@ export const ReportsStockScreen: React.FC = () => {
             <div style={{ background: '#FEE2E2', padding: '14px', borderRadius: 'var(--radius-sm)', color: '#991B1B', fontSize: '0.88rem', lineHeight: '1.5' }}>
               <strong>Tem certeza de que deseja encerrar o expediente de hoje ({formatDateBR(report?.date)})?</strong>
               <ul style={{ marginTop: '8px', paddingLeft: '20px', fontSize: '0.82rem' }}>
-                <li>Irá calcular a rotatividade exata de alimentos e bebidas.</li>
+                <li>Discriminará o Faturamento Total Geral, Total Só Sem 10% e Total Só 10%.</li>
                 <li>Irá abater fisicamente no estoque o consumo em gramas e unidades dos pratos vendidos.</li>
                 <li>Irá gerar o documento oficial em <code>.TXT</code> na pasta <code>relatorios_expediente/</code>.</li>
               </ul>
@@ -179,7 +179,7 @@ export const ReportsStockScreen: React.FC = () => {
           <div className="clean-card animate-fade-in modal-container" style={{
             background: '#FFFFFF',
             borderRadius: 'var(--radius-md)',
-            width: '750px',
+            width: '780px',
             maxWidth: '95%',
             padding: '24px',
             boxShadow: 'var(--shadow-lg)',
@@ -220,6 +220,30 @@ export const ReportsStockScreen: React.FC = () => {
                 </button>
               </div>
             )}
+
+            {/* CARD DESTACADO: FATURAMENTO TOTAL, SÓ SEM 10% E SÓ 10% */}
+            <div style={{ background: 'var(--bg-subtle)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>💰 FATURAMENTO TOTAL GERAL (COM 10%)</span>
+                <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--accent-emerald)' }}>
+                  R$ {expedientResult.report.total_sales?.toFixed(2) || '0.00'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>🍽️ TOTAL SÓ SEM OS 10% (CONSUMO)</span>
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent-blue)' }}>
+                  R$ {expedientResult.report.total_sales_subtotal?.toFixed(2) || '0.00'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>🎯 TOTAL SÓ OS 10% (GARÇONS)</span>
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#B45309' }}>
+                  R$ {expedientResult.report.total_sales_tips?.toFixed(2) || '0.00'}
+                </span>
+              </div>
+            </div>
 
             {/* Destaques das Métricas de Venda (Rankings) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px' }}>
@@ -435,7 +459,7 @@ export const ReportsStockScreen: React.FC = () => {
           <div>
             <h1 style={{ fontSize: '1.3rem' }}>Relatório Financeiro do Dia</h1>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-              Consolidado de vendas por forma de pagamento e histórico de comandas
+              Consolidado de vendas por forma de pagamento, comissão de 10% e estoque
             </p>
           </div>
 
@@ -466,23 +490,51 @@ export const ReportsStockScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Metric Cards Responsivos no Celular */}
+        {/* Metric Cards Responsivos com Faturamento Geral, Só Sem 10% e Só os 10% */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
           
-          <div className="clean-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {/* Card 1: Faturamento Total Geral */}
+          <div className="clean-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', borderLeft: '4px solid var(--accent-emerald)' }}>
             <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-md)', background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <TrendingUp size={22} />
             </div>
             <div>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Faturamento Total</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Faturamento Total (Com 10%)</span>
               <h2 style={{ fontSize: '1.35rem', color: 'var(--text-primary)' }}>
                 R$ {report?.total_sales.toFixed(2) || '0.00'}
               </h2>
             </div>
           </div>
 
-          <div className="clean-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {/* Card 2: Total Só Sem os 10% */}
+          <div className="clean-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', borderLeft: '4px solid var(--accent-blue)' }}>
             <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-md)', background: 'var(--accent-blue-light)', color: 'var(--accent-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ShoppingBag size={22} />
+            </div>
+            <div>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Sem os 10% (Consumo)</span>
+              <h2 style={{ fontSize: '1.35rem', color: 'var(--text-primary)' }}>
+                R$ {report?.total_sales_subtotal?.toFixed(2) || '0.00'}
+              </h2>
+            </div>
+          </div>
+
+          {/* Card 3: Total Só os 10% */}
+          <div className="clean-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', borderLeft: '4px solid #B45309' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-md)', background: '#FEF3C7', color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Percent size={22} />
+            </div>
+            <div>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Só os 10% (Garçom)</span>
+              <h2 style={{ fontSize: '1.35rem', color: 'var(--text-primary)' }}>
+                R$ {report?.total_sales_tips?.toFixed(2) || '0.00'}
+              </h2>
+            </div>
+          </div>
+
+          {/* Card 4: Pedidos Encerrados */}
+          <div className="clean-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-md)', background: '#F3E8FF', color: '#6B21A8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Award size={22} />
             </div>
             <div>
@@ -493,18 +545,7 @@ export const ReportsStockScreen: React.FC = () => {
             </div>
           </div>
 
-          <div className="clean-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-md)', background: '#FEF3C7', color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <DollarSign size={22} />
-            </div>
-            <div>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Saldo em Dinheiro</span>
-              <h2 style={{ fontSize: '1.35rem', color: 'var(--text-primary)' }}>
-                R$ {report?.by_payment_method.CASH.toFixed(2) || '0.00'}
-              </h2>
-            </div>
-          </div>
-
+          {/* Card 5: Alertas de Estoque */}
           <div className="clean-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-md)', background: '#E0F2FE', color: '#0284C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Package size={22} />

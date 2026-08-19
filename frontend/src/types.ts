@@ -67,7 +67,9 @@ export interface CashSession {
 export interface DailyReport {
   date: string;
   cashier_session: CashSession | null;
-  total_sales: number;
+  total_sales: number; // Faturamento Total Geral (Bruto Consumo + 10%)
+  total_sales_subtotal: number; // Total Só sem os 10% (Consumo de Pratos e Bebidas)
+  total_sales_tips: number; // Total Só 10% (Taxa de Serviço dos Garçons)
   total_orders_closed: number;
   by_payment_method: {
     CASH: number;
