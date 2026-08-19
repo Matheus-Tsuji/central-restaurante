@@ -2,6 +2,10 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { env } from './config/env.js';
+import { initDatabase } from './config/database.js';
+
+// Inicializar tabelas e dados prévios se necessário
+initDatabase();
 
 const db = new Database(env.DB_PATH);
 
@@ -15,11 +19,12 @@ db.exec('DELETE FROM cashier_sessions;');
 db.exec("UPDATE tables SET status = 'FREE', updated_at = datetime('now', 'localtime');");
 
 db.exec("UPDATE inventory SET quantity = 100 WHERE id = 'inv-pao';");
-db.exec("UPDATE inventory SET quantity = 50 WHERE id = 'inv-carne';");
-db.exec("UPDATE inventory SET quantity = 200 WHERE id = 'inv-queijo';");
-db.exec("UPDATE inventory SET quantity = 120 WHERE id = 'inv-refri';");
-db.exec("UPDATE inventory SET quantity = 5000 WHERE id = 'inv-batata';");
-db.exec("UPDATE inventory SET quantity = 3000 WHERE id = 'inv-sorvete';");
+db.exec("UPDATE inventory SET quantity = 80 WHERE id = 'inv-carne';");
+db.exec("UPDATE inventory SET quantity = 15000 WHERE id = 'inv-carne-smash';");
+db.exec("UPDATE inventory SET quantity = 300 WHERE id = 'inv-queijo';");
+db.exec("UPDATE inventory SET quantity = 150 WHERE id = 'inv-refri-cola';");
+db.exec("UPDATE inventory SET quantity = 20000 WHERE id = 'inv-batata';");
+db.exec("UPDATE inventory SET quantity = 10000 WHERE id = 'inv-sorvete';");
 
 db.pragma('foreign_keys = ON');
 console.log('✅ BANCO DE DADOS ZERADO COM SUCESSO!');

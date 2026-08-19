@@ -6,6 +6,14 @@ import { InventoryRepository } from './InventoryRepository.js';
 import { generateReceiptTxt } from '../utils/receiptGenerator.js';
 import { randomUUID } from 'node:crypto';
 
+function getLocalDateStr(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export class CashierRepository {
   static getActiveSession(): CashRegisterSession | null {
     const session = db.prepare(`
@@ -188,7 +196,7 @@ export class CashierRepository {
   }
 
   static getDailyReport(dateStr?: string): DailyReport {
-    const targetDate = dateStr || new Date().toISOString().split('T')[0]!;
+    const targetDate = dateStr || getLocalDateStr();
 
     const session = db.prepare(`
       SELECT cs.*, u1.name as opened_by_name, u2.name as closed_by_name
@@ -227,9 +235,9 @@ export class CashierRepository {
       FROM orders o
       JOIN tables t ON t.id = o.table_id
       JOIN users u ON u.id = o.waiter_id
-      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime'))
+      WHERE o.status = 'CLOSED'
       ORDER BY o.updated_at ASC
-    `).all(targetDate, targetDate) as { order_id: string; total_amount: number; closed_at: string; table_number: number; waiter_name: string }[];
+    `).all() as { order_id: string; total_amount: number; closed_at: string; table_number: number; waiter_name: string }[];
 
     const getItemDetails = db.prepare(`
       SELECT mi.name, oi.quantity, oi.unit_price, oi.total_price
@@ -268,7 +276,7 @@ export class CashierRepository {
   }
 
   static closeDailyExpedient(dateStr?: string, userId: string = 'u_caixa') {
-    const targetDate = dateStr || new Date().toISOString().split('T')[0]!;
+    const targetDate = dateStr || getLocalDateStr();
 
     // 1. Prato Mais Vendido (Comida)
     const topFood = db.prepare(`
@@ -276,11 +284,11 @@ export class CashierRepository {
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime')) AND mi.category != 'Bebidas'
+      WHERE o.status = 'CLOSED' AND mi.category != 'Bebidas'
       GROUP BY mi.id
       ORDER BY total_qty DESC
       LIMIT 1
-    `).get(targetDate, targetDate) as { name: string; total_qty: number; total_revenue: number } | undefined;
+    `).get() as { name: string; total_qty: number; total_revenue: number } | undefined;
 
     // 2. Bebida Mais Vendida
     const topDrink = db.prepare(`
@@ -288,32 +296,31 @@ export class CashierRepository {
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime')) AND mi.category = 'Bebidas'
+      WHERE o.status = 'CLOSED' AND mi.category = 'Bebidas'
       GROUP BY mi.id
       ORDER BY total_qty DESC
       LIMIT 1
-    `).get(targetDate, targetDate) as { name: string; total_qty: number; total_revenue: number } | undefined;
+    `).get() as { name: string; total_qty: number; total_revenue: number } | undefined;
 
     // 3. Mesa de Maior Faturamento
     const topTable = db.prepare(`
       SELECT t.number as table_number, SUM(o.total_amount) as total_revenue
       FROM orders o
       JOIN tables t ON t.id = o.table_id
-      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime'))
+      WHERE o.status = 'CLOSED'
       GROUP BY t.id
       ORDER BY total_revenue DESC
       LIMIT 1
-    `).get(targetDate, targetDate) as { table_number: number; total_revenue: number } | undefined;
+    `).get() as { table_number: number; total_revenue: number } | undefined;
 
     // 4. Método de Pagamento Mais Rentável
     const topPayment = db.prepare(`
       SELECT payment_method, SUM(amount) as total_revenue
       FROM payments
-      WHERE date(created_at) = date(?) OR date(created_at) = date('now', 'localtime')
       GROUP BY payment_method
       ORDER BY total_revenue DESC
       LIMIT 1
-    `).get(targetDate) as { payment_method: PaymentMethod; total_revenue: number } | undefined;
+    `).get() as { payment_method: PaymentMethod; total_revenue: number } | undefined;
 
     // 5. Insumos Consumidos no Dia (Baixa Real de Estoque)
     const consumedInventory = db.prepare(`
@@ -322,9 +329,9 @@ export class CashierRepository {
       JOIN orders o ON o.id = oi.order_id
       JOIN menu_item_ingredients mii ON mii.menu_item_id = oi.menu_item_id
       JOIN inventory inv ON inv.id = mii.inventory_id
-      WHERE o.status = 'CLOSED' AND (date(o.updated_at) = date(?) OR date(o.created_at) = date(?) OR date(o.updated_at) = date('now', 'localtime'))
+      WHERE o.status = 'CLOSED'
       GROUP BY inv.id
-    `).all(targetDate, targetDate) as { id: string; name: string; unit: string; total_consumed: number }[];
+    `).all() as { id: string; name: string; unit: string; total_consumed: number }[];
 
     // Abater fisicamente do banco de dados no estoque
     const updateInv = db.prepare(`
