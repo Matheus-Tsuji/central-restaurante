@@ -193,5 +193,19 @@ export const api = {
     } catch {
       return [];
     }
+  },
+
+  async getSystemInfo(): Promise<SystemInfo> {
+    try {
+      return await fetchWithTimeout('/system/info');
+    } catch {
+      return {
+        local_ip: window.location.hostname,
+        frontend_url: `http://${window.location.hostname}:5173`,
+        backend_url: `http://${window.location.hostname}:3000`,
+        connected_devices: [],
+        total_connected: 0
+      };
+    }
   }
 };

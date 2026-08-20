@@ -96,3 +96,20 @@ export interface DailyReport {
   }[];
   inventory_alerts: InventoryItem[];
 }
+
+export interface ConnectedDevice {
+  id: string;
+  ip: string;
+  userAgent: string;
+  deviceType: string;
+  room: string;
+  connectedAt: string;
+}
+
+export interface SystemInfo {
+  local_ip: string;
+  frontend_url: string;
+  backend_url: string;
+  connected_devices: ConnectedDevice[];
+  total_connected: number;
+}

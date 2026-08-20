@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import type { DailyReport, InventoryItem } from '../types';
+import QRCode from 'qrcode';
+import type { DailyReport, InventoryItem, SystemInfo, ConnectedDevice } from '../types';
 import { api } from '../services/api';
 import { socket } from '../services/socket';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateUtils';
-import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard, FileText, Percent, ShoppingBag } from 'lucide-react';
+import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard, FileText, Percent, ShoppingBag, QrCode, Smartphone, Monitor, Tv, Wifi, Copy, Check } from 'lucide-react';
 
 export const ReportsStockScreen: React.FC = () => {
   const [report, setReport] = useState<DailyReport | null>(null);
@@ -18,8 +19,16 @@ export const ReportsStockScreen: React.FC = () => {
   const [closingExpedient, setClosingExpedient] = useState<boolean>(false);
   const [reportTxtModal, setReportTxtModal] = useState<string | null>(null);
 
+  // Modal de Conexão de Dispositivos (QR Code & Dispositivos Conectados)
+  const [showDeviceModal, setShowDeviceModal] = useState<boolean>(false);
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+  const [connectedDevices, setConnectedDevices] = useState<ConnectedDevice[]>([]);
+  const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
+
   useEffect(() => {
     loadData();
+    loadSystemInfo();
 
     if (socket) {
       socket.on('payment:processed', () => {
@@ -28,12 +37,16 @@ export const ReportsStockScreen: React.FC = () => {
       socket.on('order:created', () => {
         loadData();
       });
+      socket.on('devices:updated', (devices: ConnectedDevice[]) => {
+        setConnectedDevices(devices);
+      });
     }
 
     return () => {
       if (socket) {
         socket.off('payment:processed');
         socket.off('order:created');
+        socket.off('devices:updated');
       }
     };
   }, []);
@@ -49,6 +62,37 @@ export const ReportsStockScreen: React.FC = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }
+
+  async function loadSystemInfo() {
+    try {
+      const sys = await api.getSystemInfo();
+      setSystemInfo(sys);
+      setConnectedDevices(sys.connected_devices || []);
+
+      // Usar a URL do frontend na porta 5173 para o QR Code
+      const frontendTargetUrl = sys.frontend_url || `http://${window.location.hostname}:5173`;
+      QRCode.toDataURL(frontendTargetUrl, { width: 260, margin: 2, color: { dark: '#0F172A', light: '#FFFFFF' } }, (err, url) => {
+        if (!err && url) {
+          setQrCodeDataUrl(url);
+        }
+      });
+    } catch (err) {
+      console.error('Erro ao obter informações do sistema:', err);
+    }
+  }
+
+  function handleOpenDeviceModal() {
+    loadSystemInfo();
+    setShowDeviceModal(true);
+  }
+
+  function handleCopyFrontendUrl() {
+    if (systemInfo?.frontend_url) {
+      navigator.clipboard.writeText(systemInfo.frontend_url);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2000);
     }
   }
 
@@ -83,10 +127,154 @@ export const ReportsStockScreen: React.FC = () => {
   }
 
   const lowStockCount = inventory.filter(i => i.quantity <= i.min_quantity).length;
+  const frontendUrlDisplay = systemInfo?.frontend_url || `http://${window.location.hostname}:5173`;
 
   return (
     <div style={{ padding: '16px', maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
+      {/* 📱 MODAL 0: ADICIONAR DISPOSITIVO (QR CODE FRONTEND PORTA 5173 & DISPOSITIVOS CONECTADOS) */}
+      {showDeviceModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1300,
+          backdropFilter: 'blur(6px)'
+        }}>
+          <div className="clean-card animate-fade-in modal-container" style={{
+            background: '#FFFFFF',
+            borderRadius: 'var(--radius-md)',
+            width: '680px',
+            maxWidth: '95%',
+            padding: '24px',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '18px',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Smartphone size={26} color="var(--accent-blue)" />
+                <div>
+                  <h2 style={{ fontSize: '1.2rem' }}>Conectar Dispositivo (Garçom / Caixa / Cozinha)</h2>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    QR Code gerado para conectar aparelhos na porta 5173 do Frontend
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setShowDeviceModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={22} color="var(--text-muted)" />
+              </button>
+            </div>
+
+            {/* Painel QR Code & Instrução de Leitura */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', alignItems: 'center', background: 'var(--bg-subtle)', padding: '16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+              
+              {/* QR Code Container */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#FFFFFF', padding: '16px', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)' }}>
+                {qrCodeDataUrl ? (
+                  <img src={qrCodeDataUrl} alt="QR Code Conexão Frontend 5173" style={{ width: '200px', height: '200px', borderRadius: '4px' }} />
+                ) : (
+                  <div style={{ width: '200px', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>Gerando QR Code...</div>
+                )}
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent-blue)' }}>
+                  Aponte a câmera do celular para conectar
+                </span>
+              </div>
+
+              {/* Instruções de Conexão */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <h3 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>📱 Como Conectar no Celular do Garçom:</h3>
+                
+                <ol style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <li>Conecte o celular na mesma rede Wi-Fi do computador.</li>
+                  <li>Abra a <strong>Câmera do Celular</strong> e escaneie o QR Code.</li>
+                  <li>Ou digite o endereço direto no navegador do celular:</li>
+                </ol>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#FFFFFF', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+                  <code style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-blue)', flex: 1, wordBreak: 'break-all' }}>
+                    {frontendUrlDisplay}
+                  </code>
+                  <button
+                    onClick={handleCopyFrontendUrl}
+                    className="btn btn-outline"
+                    style={{ padding: '4px 8px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    {copiedUrl ? <Check size={14} color="var(--accent-emerald)" /> : <Copy size={14} />}
+                    {copiedUrl ? 'Copiado' : 'Copiar'}
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Seção Dispositivos Conectados em Tempo Real */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h3 style={{ fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Wifi size={18} color="var(--accent-emerald)" />
+                  Dispositivos Conectados na Rede ({connectedDevices.length} online)
+                </h3>
+                <span className="badge badge-free" style={{ fontSize: '0.72rem' }}>
+                  🟢 Conexões Socket.IO Ativas
+                </span>
+              </div>
+
+              {connectedDevices.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Nenhum dispositivo móvel conectado no momento. Escaneie o QR Code acima!
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
+                  {connectedDevices.map(dev => (
+                    <div key={dev.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-subtle)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', fontSize: '0.82rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {dev.deviceType.includes('iPhone') || dev.deviceType.includes('Smartphone') || dev.deviceType.includes('Tablet') ? (
+                          <Smartphone size={20} color="var(--accent-blue)" />
+                        ) : dev.deviceType.includes('TV') ? (
+                          <Tv size={20} color="#6B21A8" />
+                        ) : (
+                          <Monitor size={20} color="var(--text-muted)" />
+                        )}
+                        <div>
+                          <span style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{dev.deviceType}</span>
+                          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                            IP: <code>{dev.ip}</code> • Sala/Perfil: <strong style={{ color: 'var(--accent-blue)' }}>{dev.room}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                        <span style={{ color: 'var(--accent-emerald)', fontWeight: 800, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          ● Online
+                        </span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                          {formatDateTimeBR(dev.connectedAt)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button onClick={() => setShowDeviceModal(false)} className="btn btn-primary" style={{ width: '100%', padding: '12px' }}>
+              Fechar Painel de Dispositivos
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 🔴 MODAL 1: DUPLA CONFIRMAÇÃO PARA FECHAR EXPEDIENTE DO DIA */}
       {showCloseConfirmModal && (
         <div style={{
@@ -464,6 +652,25 @@ export const ReportsStockScreen: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            
+            {/* 📱 BOTÃO DE ADICIONAR DISPOSITIVO / QR CODE DE CONEXÃO (PORTA 5173) */}
+            <button
+              onClick={handleOpenDeviceModal}
+              className="btn btn-outline"
+              style={{
+                borderColor: 'var(--accent-blue)',
+                color: 'var(--accent-blue)',
+                fontWeight: 700,
+                padding: '8px 14px',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Smartphone size={16} /> ADICIONAR DISPOSITIVO (5173)
+            </button>
+
             {/* 🔴 BOTÃO VERMELHO DE ENCERRAMENTO DE EXPEDIENTE */}
             <button
               onClick={() => setShowCloseConfirmModal(true)}
