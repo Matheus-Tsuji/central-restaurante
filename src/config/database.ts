@@ -3,6 +3,14 @@ import { env } from './env.js';
 import { hashPassword } from '../utils/crypto.js';
 import { randomUUID } from 'node:crypto';
 
+import path from 'node:path';
+import fs from 'node:fs';
+
+const dbDir = path.dirname(env.DB_PATH);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 export const db: SqliteDatabase = new Database(env.DB_PATH);
 
 db.pragma('journal_mode = WAL');
