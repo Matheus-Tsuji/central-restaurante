@@ -1,0 +1,64 @@
+================================================----------------------
+           CENTRAL RESTAURANTE S.A. - RELATÓRIO DE EXPEDIENTE           
+================================================----------------------
+Data do Expediente: 19/08/2026
+Horário do Encerramento: 21:04:57
+================================================----------------------
+
+1. RESUMO FINANCEIRO E TAXAS DE SERVIÇO (10%)
+----------------------------------------------------------------------
+💰 FATURAMENTO TOTAL GERAL (COM 10%):  R$ 545.08
+🍽️ TOTAL SÓ SEM OS 10% (CONSUMO):     R$ 507.10
+🎯 TOTAL SÓ OS 10% (TAXA DE SERVIÇO):   R$ 37.98
+----------------------------------------------------------------------
+Total de Pedidos Encerrados: 3 mesa(s)
+
+VENDAS POR FORMA DE PAGAMENTO:
+- 💚 PIX:                R$ 0.00
+- 💳 Cartão de Crédito:  R$ 179.74
+- 💳 Cartão de Débito:   R$ 127.30
+- 💵 Dinheiro:           R$ 238.04
+
+2. ANÁLISE DE DESEMPENHO E RANKINGS (BUSINESS ANALYTICS)
+----------------------------------------------------------------------
+🏆 Prato Mais Vendido:     X-Burguer Especial (4 un - R$ 131.60)
+🍸 Bebida Mais Vendida:    Refrigerante Cola 350ml (4 un - R$ 30.00)
+👑 Mesa Top Faturamento:   Mesa 5 (R$ 216.40)
+💳 Método Top Rendimento:  CASH (R$ 238.04)
+
+3. ROTATIVIDADE E BAIXA REAL DE INSUMOS NO ESTOQUE
+----------------------------------------------------------------------
+01. Bacon Defumado Fatiado (Grama)               -130 g
+02. Hambúrguer Artesanal 180g                     -4 un
+03. Hambúrguer Smash 90g (Grama)                 -450 g
+04. Costela Bovina Desfiada (Grama)              -200 g
+05. Filé Mignon Bovino (Grama)                   -300 g
+06. Pão de Hambúrguer Brioche                     -6 un
+07. Queijo Cheddar Fatiado                       -13 un
+
+4. DETALHAMENTO DE COMANDAS FECHADAS POR MESA
+----------------------------------------------------------------------
+• Mesa 03 | Garçom: Administrador Central | Fechado em: 2026-08-19 21:03:38 | Subtotal:  R$ 163.40
+   - 1x Smash Bacon Supreme (R$ 36.50)
+   - 1x X-Burguer Especial (R$ 32.90)
+   - 1x Parmegiana de Mignon (R$ 58.00)
+   - 3x Cerveja Long Neck Heineken 330ml (R$ 36.00)
+----------------------------------------------------------------------
+• Mesa 07 | Garçom: Administrador Central | Fechado em: 2026-08-19 21:03:47 | Subtotal:  R$ 127.30
+   - 1x Cerveja Long Neck Heineken 330ml (R$ 12.00)
+   - 1x Refrigerante Cola 350ml (R$ 7.50)
+   - 1x Monster Cheddar Bacon (R$ 42.00)
+   - 2x X-Burguer Especial (R$ 65.80)
+----------------------------------------------------------------------
+• Mesa 05 | Garçom: Administrador Central | Fechado em: 2026-08-19 21:04:45 | Subtotal:  R$ 216.40
+   - 3x Refrigerante Cola 350ml (R$ 22.50)
+   - 1x Coxinha de Costela (6un) (R$ 32.00)
+   - 1x Calabresa Acebolada na Chapa (R$ 38.00)
+   - 1x Anéis de Cebola Empanados 300g (R$ 26.00)
+   - 1x Veggie Burger Cogumelos (R$ 34.00)
+   - 1x X-Burguer Especial (R$ 32.90)
+   - 1x X-Salada Artesanal (R$ 31.00)
+----------------------------------------------------------------------
+================================================----------------------
+                     FIM DO RELATÓRIO DO EXPEDIENTE                     
+================================================----------------------

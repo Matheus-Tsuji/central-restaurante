@@ -1,99 +1,156 @@
-# 🍽️ Central Restaurante - Backend Multi-telas
+# 🍽️ Central Restaurante - Sistema Completo (Backend & Frontend)
 
-Sistema backend robusto e completo para gestão centralizada de restaurantes com suporte a múltiplas telas em tempo real (Caixa, Garçom, Cozinha KDS e Estoque), arquitetura em camadas, banco de dados relacional atômico (SQLite), WebSockets (Socket.IO) e suporte a sincronização offline para garçons.
+Sistema robusto, moderno e completo para gestão centralizada de restaurantes com suporte a múltiplas telas em tempo real (Caixa POS, Garçom Mobile, Cozinha KDS, Bar e Relatórios/Estoque), banco de dados SQLite atômico, WebSockets (Socket.IO), design 100% responsivo e sincronização offline.
+
+---
+
+## ⚡ Lista Completa de Funcionalidades
+
+### ⚙️ 1. Funcionalidades do Backend (API REST & Realtime)
+
+- **🔐 Autenticação & Segurança (RBAC)**
+  - Autenticação via Login com token JWT Bearer.
+  - Criptografia de senhas com `scryptSync` + `salt` aleatório de 16 bytes.
+  - Perfis de acesso restritos (RBAC): `ADMIN`, `CASHIER` (Caixa), `WAITER` (Garçom) e `KITCHEN` (Cozinha/Bar).
+  - Atribuição e rastreamento automático do operador da requisição.
+
+- **🪑 Gerenciamento de Mesas**
+  - Listagem e atualização de status em tempo real (`FREE` 🟢, `OCCUPIED` 🔴, `PAYMENT_PENDING` 🟡).
+  - Cálculo automático do extrato consolidado por mesa.
+
+- **🍔 Cardápio & Ficha Técnica**
+  - Cadastro de produtos com foto, preço, descrição e 6 categorias (*Lanches*, *Pratos Principais*, *Porções*, *Bebidas*, *Drinks do Bar*, *Sobremesas*).
+  - Mapeamento de receitas e gramaturas de insumos em `menu_item_ingredients`.
+  - Abatimento físico automático do estoque com base nas gramaturas dos pratos consumidos.
+
+- **📦 Gestão de Estoque de Insumos**
+  - Controle em unidades (`un`), gramas (`g`), quilos (`kg`), litros (`l`) e doses (`dose`).
+  - Alerta automático de insumos com saldo crítico (`quantity <= min_quantity`).
+
+- **📝 Módulo de Pedidos & Separação Automática**
+  - Separação automática de itens enviados para a Cozinha (comida) e para o Bar (bebidas/drinks).
+  - Endpoint de sincronização em lote (`POST /api/orders/sync-batch`) para comandas offline registradas pelo garçom em áreas sem sinal.
+
+- **🍳 Cozinha & 🍸 Bar (KDS - Kitchen Display System)**
+  - Fila de produção em tempo real via WebSockets (Socket.IO).
+  - Atualização por item ou botão global por mesa (`PENDING` ➡️ `PREPARING` ➡️ `READY` ➡️ `DELIVERED`).
+
+- **💰 Caixa Central (POS) & Pagamentos**
+  - Suporte a Pagamento Único ou Pagamento Fracionado/Dividido em múltiplas formas.
+  - Formas de pagamento aceitas: PIX, Cartão de Crédito, Cartão de Débito e Dinheiro.
+  - Calculadora de troco automática para pagamentos em dinheiro.
+  - Opção interativa para inclusão da Taxa de Serviço (10% Garçom).
+  - Emissão de Cupom Fiscal térmico em formato `.TXT` salvo na pasta `comprovantes_mesas/`.
+  - Reimpressão de cupons fiscaes de comandas encerradas.
+
+- **🔴 Encerramento de Expediente Diário & Business Analytics**
+  - Trava de encerramento do dia com modal de confirmação de dupla checagem.
+  - Cálculo de estatísticas e rankings: Prato mais vendido, Bebida mais vendida, Mesa top faturamento e Método de pagamento mais rentável.
+  - Baixa física real no banco de dados SQLite de todos os insumos consumidos pelas receitas no dia.
+  - Geração do Documento Oficial em `.TXT` do relatório do expediente na pasta `relatorios_expediente/`.
+  - Discriminação dos 3 totalizadores: Faturamento Total Geral (com 10%), Total Só Sem os 10% (consumo) e Total Só 10% (taxas de serviço).
+
+- **📡 Comunicação Realtime & Rede Local**
+  - Disparo instantâneo de eventos Socket.IO: `order:created`, `order:status_changed`, `table:status_changed`, `payment:processed`.
+  - Configuração de binding `0.0.0.0` para acesso simultâneo via celulares e TVs na rede Wi-Fi local.
+
+---
+
+### 📱 2. Funcionalidades do Frontend (Interface Web & Mobile)
+
+- **📱 Design Responsivo & Mobile-First**
+  - Interface do garçom 100% otimizada para smartphones (zero rolagem/estouro lateral).
+  - Proporções adaptadas para Smart TVs na Cozinha e no Bar.
+
+- **👨‍🍳 Tela do Garçom (`/garcom`)**
+  - Grid de mesas com status visual e toque fácil.
+  - Busca rápida de produtos e navegação fluida por abas de categorias.
+  - Lançamento de observações por item (ex: "Sem cebola").
+  - Barra flutuante mobile de carrinho para envio rápido à produção.
+  - Exibição discriminada dos valores: Subtotal (sem 10%), Sugestão Garçom (10%) e Total Estimado (com 10%).
+
+- **🍳 Tela da Cozinha (`/cozinha`) & 🍸 Tela do Bar (`/bar`)**
+  - Painéis KDS dedicados e separados para pedidos de comida (Cozinha) e bebidas (Bar).
+  - Botão de ação rápida por mesa ("Pronto para Todos da Mesa") e controles por item individual.
+  - Atualização instantânea na tela sem necessidade de recarregar a página.
+
+- **💳 Tela do Caixa POS (`/caixa`)**
+  - Grid de mesas ocupadas para fechamento de conta.
+  - Extrato detalhado com alternância entre visão por itens e visão por linha do tempo dos horários lançados.
+  - Checkbox interativo `[x] Incluir Taxa de Serviço (10% Garçom)`.
+  - Discriminação explícita dos valores: Subtotal sem 10%, Taxa de Serviço 10% e Total Final com 10%.
+  - Calculadora de troco em dinheiro e divisão de pagamento em múltiplas formas.
+  - Modal de conferência e verificação de segurança dos itens e valores antes da confirmação.
+  - Visualizador e simulador de impressão do Cupom Fiscal em texto térmico `.TXT`.
+  - Histórico de comandas fechadas hoje com botão para reimpressão de cupom.
+
+- **📊 Tela de Relatórios & Estoque (`/relatorios`)**
+  - Botão vermelho destacado **"🔴 ENCERRAR EXPEDIENTE DO DIA"** com modal de dupla confirmação.
+  - Dashboard de Métricas com os 3 totalizadores destacados em cards: Faturamento Total (com 10%), Total Sem 10% e Total Só 10%.
+  - Painel gerencial com destaques e rankings (Prato Top, Bebida Top, Mesa Top, Pagamento Top).
+  - Tabela visual de insumos do estoque com barras de progresso e alertas de nível crítico.
+  - Visualizador integrado do documento em `.TXT` do relatório oficial do expediente.
+  - Histórico detalhado de comandas encerradas com formatação de datas no padrão brasileiro (`DD/MM/YYYY` e `DD/MM/YYYY HH:MM`).
 
 ---
 
 ## 📐 Arquitetura do Projeto
 
-O sistema foi desenvolvido utilizando a **Arquitetura em Camadas (Layered Architecture)**, garantindo forte desacoplamento, testabilidade e separação de responsabilidades:
+O sistema foi desenvolvido utilizando a **Arquitetura em Camadas (Layered Architecture)** no backend e React com componentes funcionais no frontend:
 
 ```text
-src/
-├── config/             # Configurações do ambiente e banco de dados SQLite (better-sqlite3)
-├── utils/              # Criptografia scrypt, hash de senhas e gerador de tokens JWT
-├── models/             # Interfaces e Tipos TypeScript centralizados
-├── repositories/       # Camada de Persistência e Acesso a Dados (SQL queries atômicas)
-├── services/           # Camada de Negócio, transações, regras e baixa de estoque por ficha técnica
-├── middlewares/        # Autenticação JWT, autorização RBAC, validação Zod e Error Handling
-├── controllers/        # Camada de Apresentação HTTP (Requisição/Resposta)
-├── routes/             # Definição e roteamento das rotas RESTful da API
-├── sockets/            # Gerenciador de WebSockets em tempo real (Socket.IO)
-└── server.ts           # Inicialização do servidor Express + Socket.IO + Seed
+central-restaurante/
+├── src/                        # Backend Node.js + Express + SQLite + Socket.IO
+│   ├── config/                 # Configurações do ambiente, SQLite WAL e Seed (37+ itens)
+│   ├── controllers/            # Handlers HTTP de requisição/resposta
+│   ├── middlewares/           # Autenticação JWT, autorização RBAC e validação Zod
+│   ├── models/                 # Interfaces e Tipos TypeScript centralizados
+│   ├── repositories/          # Queries SQL atômicas, relatório e baixa por receita
+│   ├── routes/                 # Definição e roteamento das APIs RESTful
+│   ├── services/               # Regras de negócio e transações de pagamento
+│   ├── sockets/                # Gerenciador de WebSockets (Socket.IO)
+│   ├── utils/                  # Geradores de cupom, relatório TXT, datas BR e crypto
+│   └── server.ts               # Servidor Express + Socket.IO (0.0.0.0)
+│
+├── frontend/                   # Frontend React + TypeScript + Vite + Vanilla CSS
+│   ├── src/
+│   │   ├── components/         # Interfaces (Waiter, Kitchen, Bar, Cashier, Reports, Login)
+│   │   ├── services/           # APIs HTTP (fetch) e cliente Socket.IO
+│   │   ├── utils/              # Formatação de datas em padrão brasileiro (DD/MM/YYYY)
+│   │   ├── types.ts            # Tipagens TypeScript da aplicação cliente
+│   │   └── index.css           # Design System responsivo sem overflow lateral
+│   └── vite.config.ts          # Configuração de host 0.0.0.0 para acesso via celular
+│
+├── comprovantes_mesas/         # Armazenamento dos Cupons Fiscais térmicos em .TXT
+└── relatorios_expediente/      # Armazenamento dos Relatórios Oficiais do Expediente em .TXT
 ```
-
----
-
-## 🚀 Principais Módulos do Sistema
-
-### 1. 📦 Estoque & Ficha Técnica
-- Cadastro e controle de saldo de matérias-primas/insumos (`kg`, `un`, `g`, `litro`).
-- Alertas de estoque baixo (`quantity <= min_quantity`).
-- **Baixa Automática no Estoque**: Ao lançar um pedido, o sistema abate automaticamente os insumos necessários de acordo com a ficha técnica do produto. Rejeita o pedido em caso de saldo insuficiente.
-
-### 2. 📱 Garçom & Mesas
-- Gerenciamento de status das mesas (`FREE` 🟢, `OCCUPIED` 🔴, `PAYMENT_PENDING` 🟡).
-- Lançamento de pedidos por mesa com observações personalizadas por item.
-- Extrato/conta da mesa atualizada em tempo real.
-- **Sincronização Offline de Pedidos**: Rota `/api/orders/sync-batch` que recebe um lote de pedidos armazenados no IndexedDB do app do garçom quando a conexão Wi-Fi cai e retorna.
-
-### 3. 🍳 Cozinha (KDS - Kitchen Display System)
-- Visualização da fila de pedidos em tempo real via WebSockets (Socket.IO).
-- Transição de status por item (`PENDING` ➡️ `PREPARING` ➡️ `READY`).
-- Notificação automática para a tela do garçom assim que os pratos ficam prontos.
-
-### 4. 💰 Caixa (POS & Relatório Diário)
-- Controle de abertura e fechamento de sessão de caixa com saldo inicial e final.
-- Fechamento da conta da mesa com seleção de múltiplas formas de pagamento (Dinheiro, Cartão de Crédito, Cartão de Débito, PIX).
-- Cálculo automático de troco para pagamentos em dinheiro e liberação imediata da mesa.
-- **Relatório Final do Dia (`GET /api/cashier/report`)**: Totais por meio de pagamento, fechamento do caixa, **relatório de cada pedido por mesa** (itens, quantidades, valores, garçom responsável e horários) e alertas de estoque.
-
----
-
-## 🔐 Segurança e Criptografia
-
-- **Hash de Senhas**: Armazenamento com `scryptSync` + `salt` aleatório de 16 bytes e derivação de chave de 64 bytes (`node:crypto`).
-- **Tokens JWT Seguros**: Autenticação com tokens assinados via HMAC SHA-256 e expiração configurável.
-- **Controle de Acesso por Papel (RBAC)**: Proteção de rotas por perfis (`ADMIN`, `CASHIER`, `WAITER`, `KITCHEN`).
-- **Validação com Zod**: Validação estrita de todos os tipos e payloads de requisição.
-- **Transações Atômicas no SQLite**: Execução com `db.transaction()`, suporte a chaves estrangeiras (`PRAGMA foreign_keys = ON`) e alto desempenho com modo `WAL`.
 
 ---
 
 ## 🛠️ Tecnologias Utilizadas
 
-- **Node.js** & **TypeScript**
-- **Express 5** (Framework Web)
-- **SQLite** com `better-sqlite3` (Banco de dados de alta performance)
-- **Socket.IO** (Comunicação em tempo real para WebSockets)
-- **Zod** (Validação de schemas)
-- **node:crypto** (Criptografia nativa e hash de senhas)
+- **Backend**: Node.js, TypeScript, Express 5, SQLite (`better-sqlite3`), Socket.IO, Zod.
+- **Frontend**: React 18, TypeScript, Vite, Vanilla CSS (Design System com variáveis CSS), Lucide React Icons.
+- **Formato de Saída**: Cupons fiscais e relatórios gerados nativamente em arquivos `.TXT`.
 
 ---
 
 ## ⚡ Como Executar o Projeto
 
-### Pré-requisitos
-- Node.js v18+ instalado.
-
-### Passo a passo
-1. Clone o repositório:
-```bash
-git clone https://github.com/Matheus-Tsuji/central-restaurante.git
-cd central-restaurante
-```
-
-2. Instale as dependências:
+### 1. Instalar dependências e iniciar o Backend:
 ```bash
 npm install
-```
-
-3. Inicie o servidor em modo de desenvolvimento:
-```bash
 npm run dev
 ```
+*O backend estará rodando em: `http://localhost:3000` (e `http://<SEU_IP_LOCAL>:3000`)*
 
-O servidor estará rodando em: `http://localhost:3000`
+### 2. Iniciar o Frontend:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+*O frontend estará rodando em: `http://localhost:5173` (e `http://<SEU_IP_LOCAL>:5173`)*
 
 ---
 
@@ -106,62 +163,7 @@ O sistema popula automaticamente o banco de dados inicial na primeira execução
 | **Administrador** | `admin` | `admin123` |
 | **Caixa** | `caixa` | `caixa123` |
 | **Garçom** | `garcom` | `garcom123` |
-| **Cozinha** | `cozinha` | `cozinha123` |
-
----
-
-## 📖 Documentação dos Endpoints REST
-
-### 🔓 Autenticação
-- `POST /api/auth/login` - Autenticar usuário e obter Token Bearer
-- `POST /api/auth/register` - Cadastrar novo usuário (Requer ADMIN)
-- `GET /api/auth/users` - Listar usuários cadastrados (Requer ADMIN)
-
-### 📦 Estoque
-- `GET /api/inventory` - Listar todos os insumos
-- `GET /api/inventory/alerts` - Listar insumos em estado de alerta (estoque baixo)
-- `POST /api/inventory` - Cadastrar novo insumo (Requer ADMIN)
-- `PATCH /api/inventory/:id/adjust` - Ajustar quantidade manual de um insumo
-
-### 🍔 Cardápio
-- `GET /api/menu-items` - Listar produtos do cardápio com ficha técnica
-- `GET /api/menu-items/:id` - Buscar produto por ID
-- `POST /api/menu-items` - Cadastrar produto com ingredientes (Requer ADMIN)
-
-### 🪑 Mesas
-- `GET /api/tables` - Listar todas as mesas e seus status
-- `GET /api/tables/:id` - Buscar detalhes de uma mesa
-- `POST /api/tables` - Cadastrar nova mesa (Requer ADMIN)
-- `PATCH /api/tables/:id/status` - Alterar status da mesa
-
-### 📝 Pedidos (Garçom)
-- `POST /api/orders` - Criar novo pedido para uma mesa
-- `POST /api/orders/sync-batch` - Sincronizar lote de pedidos offline do garçom
-- `GET /api/orders/table/:tableId/bill` - Consultar a conta/extrato atual de uma mesa
-- `GET /api/orders/:id` - Buscar pedido por ID
-
-### 🍳 Cozinha (KDS)
-- `GET /api/kitchen/queue` - Listar fila de pedidos ativos da cozinha
-- `PATCH /api/kitchen/item/:itemId/status` - Atualizar status do item (`PENDING`, `PREPARING`, `READY`)
-
-### 💰 Caixa & Relatório Diário
-- `GET /api/cashier/session` - Consultar sessão de caixa aberta
-- `POST /api/cashier/session/open` - Abrir sessão do caixa
-- `POST /api/cashier/session/close` - Fechar sessão do caixa
-- `POST /api/cashier/payment` - Processar pagamento da conta da mesa
-- `GET /api/cashier/report` - Gerar relatório final do dia (`?date=YYYY-MM-DD`)
-
----
-
-## 📡 Eventos WebSocket (Socket.IO)
-
-- Conexão em: `ws://localhost:3000`
-- Salas disponíveis: `kitchen`, `waiter`, `cashier`
-- **Eventos em Tempo Real**:
-  - `order:created`: Notifica novo pedido para a Cozinha e o Caixa.
-  - `order:status_changed`: Notifica alteração de status do prato para Garçom e Cozinha.
-  - `table:status_changed`: Notifica alteração no status da mesa para Garçons e Caixa.
-  - `payment:processed`: Notifica pagamento realizado e liberação da mesa.
+| **Cozinha / Bar** | `cozinha` | `cozinha123` |
 
 ---
 
