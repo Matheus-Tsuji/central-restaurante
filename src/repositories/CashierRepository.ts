@@ -208,17 +208,10 @@ export class CashierRepository {
       FROM cashier_sessions cs
       JOIN users u1 ON u1.id = cs.opened_by_id
       LEFT JOIN users u2 ON u2.id = cs.closed_by_id
-      WHERE date(cs.opened_at) = date(?) OR date(cs.opened_at) = date('now', 'localtime')
+      WHERE (date(cs.opened_at) = date(?) OR date(cs.opened_at) = date('now', 'localtime'))
       ORDER BY cs.opened_at DESC
       LIMIT 1
     `).get(targetDate) as CashRegisterSession | undefined;
-
-    const paymentTotals = db.prepare(`
-      SELECT payment_method, SUM(amount) as total
-      FROM payments
-      WHERE date(created_at) = date(?) OR date(created_at) = date('now', 'localtime')
-      GROUP BY payment_method
-    `).all(targetDate) as { payment_method: PaymentMethod; total: number }[];
 
     const by_payment_method = {
       CASH: 0,
@@ -226,6 +219,28 @@ export class CashierRepository {
       DEBIT_CARD: 0,
       PIX: 0
     };
+
+    // Se a sessão mais recente estiver FECHADA (expediente do dia encerrado), zera o relatório no frontend para o novo turno!
+    if (!session || session.status === 'CLOSED') {
+      return {
+        date: targetDate,
+        cashier_session: session || null,
+        total_sales: 0,
+        total_sales_subtotal: 0,
+        total_sales_tips: 0,
+        total_orders_closed: 0,
+        by_payment_method,
+        table_orders_detail: [],
+        inventory_alerts: InventoryRepository.findLowStock()
+      };
+    }
+
+    const paymentTotals = db.prepare(`
+      SELECT payment_method, SUM(amount) as total
+      FROM payments
+      WHERE cashier_session_id = ?
+      GROUP BY payment_method
+    `).all(session.id) as { payment_method: PaymentMethod; total: number }[];
 
     let total_sales = 0;
     for (const p of paymentTotals) {
@@ -236,13 +251,14 @@ export class CashierRepository {
     }
 
     const closedOrders = db.prepare(`
-      SELECT o.id as order_id, o.total_amount, o.updated_at as closed_at, t.number as table_number, u.name as waiter_name
+      SELECT DISTINCT o.id as order_id, o.total_amount, o.updated_at as closed_at, t.number as table_number, u.name as waiter_name
       FROM orders o
       JOIN tables t ON t.id = o.table_id
       JOIN users u ON u.id = o.waiter_id
-      WHERE o.status = 'CLOSED'
+      JOIN payments p ON p.order_id = o.id
+      WHERE p.cashier_session_id = ? AND o.status = 'CLOSED'
       ORDER BY o.updated_at ASC
-    `).all() as { order_id: string; total_amount: number; closed_at: string; table_number: number; waiter_name: string }[];
+    `).all(session.id) as { order_id: string; total_amount: number; closed_at: string; table_number: number; waiter_name: string }[];
 
     const getItemDetails = db.prepare(`
       SELECT mi.name, oi.quantity, oi.unit_price, oi.total_price
@@ -274,7 +290,7 @@ export class CashierRepository {
 
     return {
       date: targetDate,
-      cashier_session: session || null,
+      cashier_session: session,
       total_sales: Number(total_sales.toFixed(2)),
       total_sales_subtotal: Number(total_sales_subtotal.toFixed(2)),
       total_sales_tips: Number(total_sales_tips.toFixed(2)),
