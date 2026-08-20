@@ -78,13 +78,22 @@ export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCre
     return matchesCategory && matchesSearch;
   });
 
+  const lastClickTimeRef = React.useRef<{ [key: string]: number }>({});
+
   function addToCart(item: MenuItem) {
+    const now = Date.now();
+    const lastTime = lastClickTimeRef.current[item.id] || 0;
+    if (now - lastTime < 50) {
+      return;
+    }
+    lastClickTimeRef.current[item.id] = now;
+
     setCart(prev => {
       const existingIndex = prev.findIndex(c => c.menuItem.id === item.id);
       if (existingIndex > -1) {
-        const copy = [...prev];
-        copy[existingIndex]!.quantity += 1;
-        return copy;
+        return prev.map((c, idx) =>
+          idx === existingIndex ? { ...c, quantity: c.quantity + 1 } : c
+        );
       }
       return [...prev, { menuItem: item, quantity: 1, notes: '' }];
     });

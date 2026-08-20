@@ -1,9 +1,9 @@
-import Database from 'better-sqlite3';
+import Database, { type Database as SqliteDatabase } from 'better-sqlite3';
 import { env } from './env.js';
 import { hashPassword } from '../utils/crypto.js';
 import { randomUUID } from 'node:crypto';
 
-export const db = new Database(env.DB_PATH);
+export const db: SqliteDatabase = new Database(env.DB_PATH);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
