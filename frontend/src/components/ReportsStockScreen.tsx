@@ -4,7 +4,7 @@ import type { DailyReport, InventoryItem, SystemInfo, ConnectedDevice } from '..
 import { api } from '../services/api';
 import { socket } from '../services/socket';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateUtils';
-import { TrendingUp, DollarSign, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard, FileText, Percent, ShoppingBag, QrCode, Smartphone, Monitor, Tv, Wifi, Copy, Check } from 'lucide-react';
+import { TrendingUp, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard, FileText, Percent, ShoppingBag, Smartphone, Monitor, Tv, Wifi, Copy, Check } from 'lucide-react';
 
 export const ReportsStockScreen: React.FC = () => {
   const [report, setReport] = useState<DailyReport | null>(null);

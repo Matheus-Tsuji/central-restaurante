@@ -1,20 +1,32 @@
 {
-  "name": "syst",
+  "name": "central-restaurante",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Sistema Central Restaurante S.A. Multi-telas (Desktop Electron & Mobile)",
+  "main": "main.js",
+  "type": "module",
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
     "reset-db": "tsx src/resetDb.ts",
     "frontend:dev": "npm --prefix frontend run dev",
+    "electron:dev": "npm run build:vite && npm run build && electron .",
     "build": "tsc",
+    "build:vite": "npm --prefix frontend run build",
+    "build:electron": "electron-builder",
+    "dist": "npm run build:vite && npm run build && npm run build:electron",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "restaurant",
+    "pos",
+    "kds",
+    "electron",
+    "express",
+    "react",
+    "vite"
+  ],
+  "author": "Matheus Tsuji",
   "license": "ISC",
-  "type": "module",
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "bonjour-service": "^1.4.4",
@@ -33,7 +45,40 @@
     "@types/node": "^26.2.0",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/uuid": "^10.0.0",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"
+  },
+  "build": {
+    "appId": "com.centralrestaurante.app",
+    "productName": "Central Restaurante S.A.",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.js",
+      "dist/**/*",
+      "frontend/dist/**/*",
+      "build/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      "frontend/dist/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Central Restaurante S.A."
+    },
+    "asar": false
   }
 }

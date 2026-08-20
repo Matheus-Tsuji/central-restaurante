@@ -1,4 +1,4 @@
-import type { Table, MenuItem, Order, InventoryItem, DailyReport } from '../types';
+import type { Table, MenuItem, Order, InventoryItem, DailyReport, SystemInfo } from '../types';
 
 let activeToken: string | null = null;
 let isAuthenticating = false;
@@ -168,6 +168,8 @@ export const api = {
         date: new Date().toISOString().split('T')[0]!,
         cashier_session: null,
         total_sales: 0,
+        total_sales_subtotal: 0,
+        total_sales_tips: 0,
         total_orders_closed: 0,
         by_payment_method: {
           CASH: 0,

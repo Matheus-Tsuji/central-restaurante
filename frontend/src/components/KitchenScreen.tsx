@@ -17,17 +17,21 @@ export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) =
   useEffect(() => {
     loadQueue();
 
-    socket.on('order:created', () => {
-      loadQueue();
-    });
+    if (socket) {
+      socket.on('order:created', () => {
+        loadQueue();
+      });
 
-    socket.on('order:status_changed', () => {
-      loadQueue();
-    });
+      socket.on('order:status_changed', () => {
+        loadQueue();
+      });
+    }
 
     return () => {
-      socket.off('order:created');
-      socket.off('order:status_changed');
+      if (socket) {
+        socket.off('order:created');
+        socket.off('order:status_changed');
+      }
     };
   }, [type]);
 
