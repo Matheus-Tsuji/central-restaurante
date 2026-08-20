@@ -94,6 +94,12 @@ export function getIO(): SocketIOServer {
   return io;
 }
 
+export function emitEvent(event: string, data?: any): void {
+  if (io) {
+    io.emit(event, data);
+  }
+}
+
 // Métodos utilitários para disparo de eventos em tempo real
 export function notifyOrderCreated(order: any): void {
   if (io) {

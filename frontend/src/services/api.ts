@@ -1,4 +1,4 @@
-import type { Table, MenuItem, Order, InventoryItem, DailyReport, SystemInfo } from '../types';
+import type { Table, MenuItem, Order, InventoryItem, DailyReport, SystemInfo, RestaurantSettings } from '../types';
 
 let activeToken: string | null = null;
 let isAuthenticating = false;
@@ -209,5 +209,97 @@ export const api = {
         total_connected: 0
       };
     }
+  },
+
+  // ==========================================
+  // MÉTODOS DE ADMIN & CUSTOMIZAÇÃO TOTAL
+  // ==========================================
+  async addTable(number: number, name?: string): Promise<Table> {
+    return await fetchWithTimeout('/admin/tables', {
+      method: 'POST',
+      body: JSON.stringify({ number, name })
+    });
+  },
+
+  async updateTable(id: string, number: number, name: string): Promise<Table> {
+    return await fetchWithTimeout(`/admin/tables/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ number, name })
+    });
+  },
+
+  async deleteTable(id: string): Promise<any> {
+    return await fetchWithTimeout(`/admin/tables/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async addMenuItem(data: { name: string; description: string; price: number; category: string }): Promise<MenuItem> {
+    return await fetchWithTimeout('/admin/menu', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async updateMenuItem(id: string, data: { name: string; description: string; price: number; category: string; active?: boolean }): Promise<MenuItem> {
+    return await fetchWithTimeout(`/admin/menu/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async deleteMenuItem(id: string): Promise<any> {
+    return await fetchWithTimeout(`/admin/menu/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async addInventoryItem(data: { name: string; unit: string; quantity: number; min_quantity: number; unit_price: number }): Promise<InventoryItem> {
+    return await fetchWithTimeout('/admin/inventory', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async updateInventoryItem(id: string, data: { name: string; unit: string; quantity: number; min_quantity: number; unit_price: number }): Promise<InventoryItem> {
+    return await fetchWithTimeout(`/admin/inventory/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async restockInventoryItem(id: string, quantity: number): Promise<InventoryItem> {
+    return await fetchWithTimeout(`/admin/inventory/${id}/restock`, {
+      method: 'POST',
+      body: JSON.stringify({ quantity })
+    });
+  },
+
+  async deleteInventoryItem(id: string): Promise<any> {
+    return await fetchWithTimeout(`/admin/inventory/${id}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async getSettings(): Promise<RestaurantSettings> {
+    try {
+      return await fetchWithTimeout('/admin/settings');
+    } catch {
+      return {
+        restaurant_name: 'Central Restaurante S.A.',
+        cnpj: '12.345.678/0001-90',
+        phone: '(11) 99999-8888',
+        address: 'Av. Principal, 1000 - Centro - São Paulo/SP',
+        service_tax_percent: 10,
+        payment_methods_allowed: ['CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'PIX']
+      };
+    }
+  },
+
+  async updateSettings(data: Partial<RestaurantSettings>): Promise<RestaurantSettings> {
+    return await fetchWithTimeout('/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
   }
 };

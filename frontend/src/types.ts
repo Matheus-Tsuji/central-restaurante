@@ -113,3 +113,12 @@ export interface SystemInfo {
   connected_devices: ConnectedDevice[];
   total_connected: number;
 }
+
+export interface RestaurantSettings {
+  restaurant_name: string;
+  cnpj: string;
+  phone: string;
+  address: string;
+  service_tax_percent: number;
+  payment_methods_allowed: string[];
+}

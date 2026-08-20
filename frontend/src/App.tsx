@@ -5,6 +5,7 @@ import { WaiterScreen } from './components/WaiterScreen';
 import { KitchenScreen } from './components/KitchenScreen';
 import { CashierScreen } from './components/CashierScreen';
 import { ReportsStockScreen } from './components/ReportsStockScreen';
+import { AdminScreen } from './components/AdminScreen';
 import { offlineDb } from './services/offlineDb';
 import { socket, joinRoom } from './services/socket';
 import { api } from './services/api';
@@ -164,6 +165,7 @@ export function AppContent() {
           <Route path="/bar" element={<KitchenScreen type="BAR" />} />
           <Route path="/caixa" element={<CashierScreen />} />
           <Route path="/relatorios" element={<ReportsStockScreen />} />
+          <Route path="/admin" element={<AdminScreen />} />
           {/* Rota coringa para redirecionamento seguro */}
           <Route path="*" element={<Navigate to="/garcom" replace />} />
         </Routes>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Utensils, ChefHat, GlassWater, Receipt, BarChart3, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Utensils, ChefHat, GlassWater, Receipt, BarChart3, Settings, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 interface HeaderProps {
   isOnline: boolean;
@@ -15,17 +15,16 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
-
   const currentPath = location.pathname;
 
   return (
     <header style={{
-      background: '#FFFFFF',
-      borderBottom: '1px solid var(--border-light)',
+      background: '#0F172A',
+      borderBottom: '1px solid #334155',
       position: 'sticky',
       top: 0,
       zIndex: 100,
-      boxShadow: 'var(--shadow-sm)',
+      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
       width: '100%'
     }}>
       <div style={{
@@ -38,53 +37,57 @@ export const Header: React.FC<HeaderProps> = ({
         flexWrap: 'wrap',
         gap: '12px'
       }}>
-        {/* Brand / Logo */}
+        {/* Brand / Logo Oficial CR */}
         <div 
           onClick={() => navigate('/garcom')}
-          style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
         >
-          <div style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: 'var(--radius-md)',
-            background: 'linear-gradient(135deg, var(--accent-emerald) 0%, var(--accent-blue) 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#FFFFFF',
-            fontWeight: 800,
-            fontSize: '1.1rem',
-            boxShadow: '0 4px 12px rgba(5, 150, 105, 0.2)'
-          }}>
-            CR
-          </div>
+          <img 
+            src="/icon.png" 
+            alt="Logo CR" 
+            onError={(e) => {
+              // Fallback para favicon.ico se icon.png falhar
+              (e.target as HTMLImageElement).src = '/favicon.ico';
+            }}
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '10px',
+              objectFit: 'cover',
+              border: '2px solid #F59E0B',
+              boxShadow: '0 0 12px rgba(245, 158, 11, 0.4)',
+              background: '#020617'
+            }} 
+          />
           <div>
-            <h1 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>
-              Central Restaurante
+            <h1 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#F8FAFC', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+              Central Restaurante <span style={{ color: '#F59E0B', fontSize: '0.8rem', fontWeight: 700 }}>PRO</span>
             </h1>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-              Sistema Operacional Multi-telas
+            <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 500 }}>
+              Sistema de Gestão & Operação Multi-telas
             </span>
           </div>
         </div>
 
-        {/* Status Conexão / Sync Badge no Topo em Telas Perto da Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {/* Status Conexão / Sync Badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {offlineCount > 0 && (
             <button
               onClick={onSyncOffline}
-              className="btn btn-outline"
+              className="btn"
               style={{
-                padding: '4px 10px',
+                padding: '4px 12px',
                 fontSize: '0.75rem',
                 borderColor: '#F59E0B',
-                color: '#B45309',
-                background: '#FEF3C7',
-                minHeight: '34px'
+                color: '#FEF3C7',
+                background: 'rgba(245, 158, 11, 0.2)',
+                border: '1px solid #F59E0B',
+                minHeight: '34px',
+                borderRadius: '20px'
               }}
-              title="Clique para sincronizar pedidos pendentes do IndexedDB"
+              title="Clique para sincronizar pedidos pendentes salvos offline"
             >
-              <RefreshCw size={13} />
+              <RefreshCw size={13} className="spin" />
               Sync ({offlineCount})
             </button>
           )}
@@ -93,10 +96,11 @@ export const Header: React.FC<HeaderProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '4px 10px',
-            borderRadius: 'var(--radius-full)',
-            background: isOnline ? 'var(--accent-emerald-light)' : '#FEE2E2',
-            color: isOnline ? 'var(--accent-emerald)' : '#991B1B',
+            padding: '5px 12px',
+            borderRadius: '20px',
+            background: isOnline ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+            border: isOnline ? '1px solid #10B981' : '1px solid #EF4444',
+            color: isOnline ? '#34D399' : '#FCA5A5',
             fontSize: '0.75rem',
             fontWeight: 700
           }}>
@@ -105,14 +109,15 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* NAVEGAÇÃO ROLÁVEL NO CELULAR (FULL MOBILE TOUCH BAR) */}
+        {/* NAVEGAÇÃO COMPLETA DE ABAS (RESPONSIVA) */}
         <nav className="nav-tabs-mobile" style={{
           display: 'flex',
-          background: 'var(--bg-subtle)',
+          background: '#1E293B',
           padding: '4px',
-          borderRadius: 'var(--radius-md)',
+          borderRadius: '10px',
           gap: '4px',
           width: '100%',
+          border: '1px solid #334155',
           overflowX: 'auto',
           WebkitOverflowScrolling: 'touch'
         }}>
@@ -120,11 +125,11 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => navigate('/garcom')}
             className="btn"
             style={{
-              background: currentPath.includes('/garcom') || currentPath === '/' ? '#FFFFFF' : 'transparent',
-              color: currentPath.includes('/garcom') || currentPath === '/' ? 'var(--accent-blue)' : 'var(--text-secondary)',
-              boxShadow: currentPath.includes('/garcom') || currentPath === '/' ? 'var(--shadow-sm)' : 'none',
-              borderRadius: 'var(--radius-sm)',
-              padding: '8px 12px',
+              background: currentPath.includes('/garcom') || currentPath === '/' ? '#F59E0B' : 'transparent',
+              color: currentPath.includes('/garcom') || currentPath === '/' ? '#0F172A' : '#94A3B8',
+              fontWeight: currentPath.includes('/garcom') || currentPath === '/' ? 800 : 500,
+              borderRadius: '8px',
+              padding: '8px 14px',
               fontSize: '0.82rem',
               whiteSpace: 'nowrap',
               minHeight: '38px',
@@ -139,11 +144,11 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => navigate('/cozinha')}
             className="btn"
             style={{
-              background: currentPath.includes('/cozinha') ? '#FFFFFF' : 'transparent',
-              color: currentPath.includes('/cozinha') ? 'var(--accent-emerald)' : 'var(--text-secondary)',
-              boxShadow: currentPath.includes('/cozinha') ? 'var(--shadow-sm)' : 'none',
-              borderRadius: 'var(--radius-sm)',
-              padding: '8px 12px',
+              background: currentPath.includes('/cozinha') ? '#10B981' : 'transparent',
+              color: currentPath.includes('/cozinha') ? '#0F172A' : '#94A3B8',
+              fontWeight: currentPath.includes('/cozinha') ? 800 : 500,
+              borderRadius: '8px',
+              padding: '8px 14px',
               fontSize: '0.82rem',
               whiteSpace: 'nowrap',
               minHeight: '38px',
@@ -158,11 +163,11 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => navigate('/bar')}
             className="btn"
             style={{
-              background: currentPath.includes('/bar') ? '#FFFFFF' : 'transparent',
-              color: currentPath.includes('/bar') ? '#0284C7' : 'var(--text-secondary)',
-              boxShadow: currentPath.includes('/bar') ? 'var(--shadow-sm)' : 'none',
-              borderRadius: 'var(--radius-sm)',
-              padding: '8px 12px',
+              background: currentPath.includes('/bar') ? '#0284C7' : 'transparent',
+              color: currentPath.includes('/bar') ? '#FFFFFF' : '#94A3B8',
+              fontWeight: currentPath.includes('/bar') ? 800 : 500,
+              borderRadius: '8px',
+              padding: '8px 14px',
               fontSize: '0.82rem',
               whiteSpace: 'nowrap',
               minHeight: '38px',
@@ -177,11 +182,11 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => navigate('/caixa')}
             className="btn"
             style={{
-              background: currentPath.includes('/caixa') ? '#FFFFFF' : 'transparent',
-              color: currentPath.includes('/caixa') ? 'var(--accent-blue)' : 'var(--text-secondary)',
-              boxShadow: currentPath.includes('/caixa') ? 'var(--shadow-sm)' : 'none',
-              borderRadius: 'var(--radius-sm)',
-              padding: '8px 12px',
+              background: currentPath.includes('/caixa') ? '#3B82F6' : 'transparent',
+              color: currentPath.includes('/caixa') ? '#FFFFFF' : '#94A3B8',
+              fontWeight: currentPath.includes('/caixa') ? 800 : 500,
+              borderRadius: '8px',
+              padding: '8px 14px',
               fontSize: '0.82rem',
               whiteSpace: 'nowrap',
               minHeight: '38px',
@@ -196,11 +201,11 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => navigate('/relatorios')}
             className="btn"
             style={{
-              background: currentPath.includes('/relatorios') ? '#FFFFFF' : 'transparent',
-              color: currentPath.includes('/relatorios') ? 'var(--accent-emerald)' : 'var(--text-secondary)',
-              boxShadow: currentPath.includes('/relatorios') ? 'var(--shadow-sm)' : 'none',
-              borderRadius: 'var(--radius-sm)',
-              padding: '8px 12px',
+              background: currentPath.includes('/relatorios') ? '#8B5CF6' : 'transparent',
+              color: currentPath.includes('/relatorios') ? '#FFFFFF' : '#94A3B8',
+              fontWeight: currentPath.includes('/relatorios') ? 800 : 500,
+              borderRadius: '8px',
+              padding: '8px 14px',
               fontSize: '0.82rem',
               whiteSpace: 'nowrap',
               minHeight: '38px',
@@ -209,6 +214,25 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <BarChart3 size={16} />
             Relatórios
+          </button>
+
+          <button
+            onClick={() => navigate('/admin')}
+            className="btn"
+            style={{
+              background: currentPath.includes('/admin') ? '#EC4899' : 'transparent',
+              color: currentPath.includes('/admin') ? '#FFFFFF' : '#94A3B8',
+              fontWeight: currentPath.includes('/admin') ? 800 : 500,
+              borderRadius: '8px',
+              padding: '8px 14px',
+              fontSize: '0.82rem',
+              whiteSpace: 'nowrap',
+              minHeight: '38px',
+              flex: 1
+            }}
+          >
+            <Settings size={16} />
+            Gestão & Admin
           </button>
         </nav>
       </div>

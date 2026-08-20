@@ -126,6 +126,12 @@ export function initDatabase(): void {
       FOREIGN KEY (cashier_session_id) REFERENCES cashier_sessions(id)
     );
 
+    CREATE TABLE IF NOT EXISTS restaurant_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_orders_table ON orders(table_id);
     CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
     CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);

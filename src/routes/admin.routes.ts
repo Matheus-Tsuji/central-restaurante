@@ -1,0 +1,187 @@
+import { Router } from 'express';
+import { authenticate } from '../middlewares/authMiddleware.js';
+import { AdminRepository } from '../repositories/AdminRepository.js';
+import { emitEvent } from '../sockets/socketManager.js';
+
+const router = Router();
+
+// Todas as rotas administrativas requerem autenticação
+router.use(authenticate);
+
+// ==========================================
+// 1. MESAS (CRUD)
+// ==========================================
+router.post('/tables', (req, res, next) => {
+  try {
+    const { number, name } = req.body;
+    if (!number || isNaN(Number(number))) {
+      return res.status(400).json({ error: 'Número da mesa é obrigatório e deve ser numérico.' });
+    }
+    const table = AdminRepository.addTable(Number(number), name);
+    emitEvent('tables:updated');
+    res.status(201).json(table);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/tables/:id', (req, res, next) => {
+  try {
+    const { number, name } = req.body;
+    if (!number || isNaN(Number(number))) {
+      return res.status(400).json({ error: 'Número da mesa é obrigatório.' });
+    }
+    const table = AdminRepository.updateTable(req.params.id, Number(number), name);
+    emitEvent('tables:updated');
+    res.json(table);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/tables/:id', (req, res, next) => {
+  try {
+    AdminRepository.deleteTable(req.params.id);
+    emitEvent('tables:updated');
+    res.json({ success: true, message: 'Mesa excluída com sucesso.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==========================================
+// 2. CARDÁPIO (CRUD)
+// ==========================================
+router.post('/menu', (req, res, next) => {
+  try {
+    const { name, description, price, category } = req.body;
+    if (!name || price === undefined || !category) {
+      return res.status(400).json({ error: 'Nome, preço e categoria são obrigatórios.' });
+    }
+    const item = AdminRepository.addMenuItem({
+      name,
+      description: description || '',
+      price: Number(price),
+      category
+    });
+    emitEvent('menu:updated');
+    res.status(201).json(item);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/menu/:id', (req, res, next) => {
+  try {
+    const { name, description, price, category, active } = req.body;
+    const item = AdminRepository.updateMenuItem(req.params.id, {
+      name,
+      description: description || '',
+      price: Number(price),
+      category,
+      active
+    });
+    emitEvent('menu:updated');
+    res.json(item);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/menu/:id', (req, res, next) => {
+  try {
+    AdminRepository.deleteMenuItem(req.params.id);
+    emitEvent('menu:updated');
+    res.json({ success: true, message: 'Item removido do cardápio.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==========================================
+// 3. ESTOQUE (CRUD & REPOSIÇÃO)
+// ==========================================
+router.post('/inventory', (req, res, next) => {
+  try {
+    const { name, unit, quantity, min_quantity, unit_price } = req.body;
+    if (!name || !unit) {
+      return res.status(400).json({ error: 'Nome do insumo e unidade de medida são obrigatórios.' });
+    }
+    const item = AdminRepository.addInventoryItem({
+      name,
+      unit,
+      quantity: Number(quantity || 0),
+      min_quantity: Number(min_quantity || 0),
+      unit_price: Number(unit_price || 0)
+    });
+    emitEvent('inventory:updated');
+    res.status(201).json(item);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/inventory/:id', (req, res, next) => {
+  try {
+    const { name, unit, quantity, min_quantity, unit_price } = req.body;
+    const item = AdminRepository.updateInventoryItem(req.params.id, {
+      name,
+      unit,
+      quantity: Number(quantity),
+      min_quantity: Number(min_quantity),
+      unit_price: Number(unit_price)
+    });
+    emitEvent('inventory:updated');
+    res.json(item);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/inventory/:id/restock', (req, res, next) => {
+  try {
+    const { quantity } = req.body;
+    if (!quantity || isNaN(Number(quantity))) {
+      return res.status(400).json({ error: 'Quantidade a repor é obrigatória.' });
+    }
+    const item = AdminRepository.restockItem(req.params.id, Number(quantity));
+    emitEvent('inventory:updated');
+    res.json(item);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/inventory/:id', (req, res, next) => {
+  try {
+    AdminRepository.deleteInventoryItem(req.params.id);
+    emitEvent('inventory:updated');
+    res.json({ success: true, message: 'Insumo removido do estoque.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==========================================
+// 4. CONFIGURAÇÕES DO RESTAURANTE
+// ==========================================
+router.get('/settings', (req, res, next) => {
+  try {
+    const settings = AdminRepository.getSettings();
+    res.json(settings);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/settings', (req, res, next) => {
+  try {
+    const updated = AdminRepository.updateSettings(req.body);
+    emitEvent('settings:updated');
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+export default router;
