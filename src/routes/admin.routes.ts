@@ -184,4 +184,21 @@ router.put('/settings', (req, res, next) => {
   }
 });
 
+// ==========================================
+// 5. ALTERAR CREDENCIAIS DO ADMIN
+// ==========================================
+router.post('/change-credentials', (req: any, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Usuário não autenticado.' });
+    }
+    const { currentPassword, newUsername, newPassword } = req.body;
+    AdminRepository.changeAdminCredentials(userId, { currentPassword, newUsername, newPassword });
+    res.json({ success: true, message: 'Credenciais de Administrador alteradas com sucesso!' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

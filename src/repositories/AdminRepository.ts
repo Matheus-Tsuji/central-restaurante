@@ -1,5 +1,6 @@
 import { db } from '../config/database.js';
 import { randomUUID } from 'node:crypto';
+import { hashPassword } from '../utils/crypto.js';
 import { Table, MenuItem, InventoryItem } from '../models/types.js';
 
 export interface RestaurantSettings {
@@ -169,5 +170,36 @@ export class AdminRepository {
     if (data.payment_methods_allowed !== undefined) upsert.run('payment_methods_allowed', data.payment_methods_allowed.join(','));
 
     return this.getSettings();
+  }
+
+  // ==========================================
+  // 6. SEGURANÇA DE CREDENCIAIS ADMIN
+  // ==========================================
+  static changeAdminCredentials(currentUserId: string, data: { currentPassword: string; newUsername: string; newPassword: string }): void {
+    const adminUser = db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId) as any;
+    if (!adminUser) {
+      throw new Error('Usuário administrador não encontrado.');
+    }
+
+    if (hashPassword(data.currentPassword) !== adminUser.password_hash) {
+      throw new Error('A senha atual do Administrador está incorreta!');
+    }
+
+    if (!data.newUsername || data.newUsername.trim().length < 3) {
+      throw new Error('O novo nome de usuário deve conter no mínimo 3 caracteres.');
+    }
+
+    if (!data.newPassword || data.newPassword.trim().length < 4) {
+      throw new Error('A nova senha deve conter no mínimo 4 caracteres.');
+    }
+
+    const existing = db.prepare('SELECT * FROM users WHERE username = ? AND id != ?').get(data.newUsername.trim(), currentUserId) as any;
+    if (existing) {
+      throw new Error(`O nome de usuário "${data.newUsername}" já está em uso por outro usuário.`);
+    }
+
+    const newHash = hashPassword(data.newPassword.trim());
+
+    db.prepare('UPDATE users SET username = ?, password_hash = ? WHERE id = ?').run(data.newUsername.trim(), newHash, currentUserId);
   }
 }

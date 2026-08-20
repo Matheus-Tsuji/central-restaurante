@@ -19,10 +19,24 @@ import {
   RefreshCw,
   Search,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Lock,
+  Unlock,
+  Key,
+  ShieldAlert
 } from 'lucide-react';
 
 export const AdminScreen: React.FC = () => {
+  // Controle de Autenticação do Administrador
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+  const [loginUser, setLoginUser] = useState<string>('admin');
+  const [loginPass, setLoginPass] = useState<string>('');
+  const [loginError, setLoginError] = useState<string>('');
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+
+  // Formulário de Alteração de Credenciais do Admin
+  const [credForm, setCredForm] = useState({ currentPassword: '', newUsername: '', newPassword: '', confirmPassword: '' });
+
   const [activeTab, setActiveTab] = useState<'tables' | 'menu' | 'inventory' | 'settings'>('tables');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -99,6 +113,54 @@ export const AdminScreen: React.FC = () => {
   function showMessage(type: 'success' | 'error', text: string) {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 4000);
+  }
+
+  async function handleAdminLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoginError('');
+    setIsLoggingIn(true);
+    try {
+      const user = await api.login(loginUser.trim(), loginPass);
+      if (user.role !== 'ADMIN') {
+        setLoginError('Acesso negado: Este usuário não possui privilégios de Administrador.');
+        return;
+      }
+      setIsAdminAuthenticated(true);
+      setLoginPass('');
+      loadAllAdminData();
+    } catch (err: any) {
+      setLoginError(err.message || 'Usuário ou senha de Administrador incorretos!');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }
+
+  async function handleChangeCredentials(e: React.FormEvent) {
+    e.preventDefault();
+    if (!credForm.currentPassword) {
+      return showMessage('error', 'Digite sua senha atual de Administrador.');
+    }
+    if (!credForm.newUsername || credForm.newUsername.trim().length < 3) {
+      return showMessage('error', 'O novo usuário deve conter no mínimo 3 caracteres.');
+    }
+    if (!credForm.newPassword || credForm.newPassword.length < 4) {
+      return showMessage('error', 'A nova senha deve conter no mínimo 4 caracteres.');
+    }
+    if (credForm.newPassword !== credForm.confirmPassword) {
+      return showMessage('error', 'A nova senha e a confirmação de senha não coincidem.');
+    }
+
+    try {
+      await api.changeAdminCredentials({
+        currentPassword: credForm.currentPassword,
+        newUsername: credForm.newUsername.trim(),
+        newPassword: credForm.newPassword
+      });
+      showMessage('success', '✅ Credenciais de Administrador alteradas com sucesso! Guarde seu novo usuário e senha.');
+      setCredForm({ currentPassword: '', newUsername: '', newPassword: '', confirmPassword: '' });
+    } catch (err: any) {
+      showMessage('error', err.message || 'Erro ao alterar credenciais do Administrador.');
+    }
   }
 
   // ==========================================
@@ -284,6 +346,140 @@ export const AdminScreen: React.FC = () => {
   // Categorias distintas para o filtro
   const categoriesList = Array.from(new Set(menuItems.map(m => m.category)));
 
+  // SE NÃO AUTENTICADO COMO ADMIN, EXIBE A TELA DE BLOQUEIO DE SEGURANÇA
+  if (!isAdminAuthenticated) {
+    return (
+      <div style={{
+        minHeight: '75vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px'
+      }}>
+        <div className="clean-card animate-fade-in" style={{
+          maxWidth: '440px',
+          width: '100%',
+          padding: '32px 28px',
+          borderRadius: '20px',
+          boxShadow: '0 12px 36px rgba(15, 23, 42, 0.15)',
+          border: '1px solid #E2E8F0',
+          background: '#FFFFFF',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            width: '68px',
+            height: '68px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)',
+            border: '2px solid #F59E0B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px auto',
+            boxShadow: '0 6px 16px rgba(245, 158, 11, 0.25)'
+          }}>
+            <Lock size={32} color="#D97706" />
+          </div>
+
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
+            Acesso Restrito ao Administrador
+          </h2>
+
+          <p style={{ fontSize: '0.86rem', color: '#64748B', lineHeight: 1.5, marginBottom: '24px' }}>
+            Esta área é protegida e contém a gestão de cardápio, estoques, mesas e configurações do sistema. Digite o usuário e senha de Administrador.
+          </p>
+
+          {loginError && (
+            <div style={{
+              background: '#FEE2E2',
+              color: '#991B1B',
+              border: '1px solid #FCA5A5',
+              borderRadius: '12px',
+              padding: '12px 14px',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              textAlign: 'left'
+            }}>
+              <ShieldAlert size={18} color="#EF4444" style={{ flexShrink: 0 }} />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLogin}>
+            <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Usuário do Administrador
+              </label>
+              <input
+                type="text"
+                value={loginUser}
+                onChange={(e) => setLoginUser(e.target.value)}
+                placeholder="Ex: admin"
+                className="input"
+                style={{ width: '100%', padding: '12px 14px', borderRadius: '10px' }}
+                required
+              />
+            </div>
+
+            <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '6px' }}>
+                Senha de Acesso
+              </label>
+              <input
+                type="password"
+                value={loginPass}
+                onChange={(e) => setLoginPass(e.target.value)}
+                placeholder="Digite a senha do admin"
+                className="input"
+                style={{ width: '100%', padding: '12px 14px', borderRadius: '10px' }}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="btn btn-primary"
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.3)'
+              }}
+            >
+              {isLoggingIn ? (
+                <span>Autenticando...</span>
+              ) : (
+                <>
+                  <Unlock size={18} /> Liberar Acesso ao Painel Admin
+                </>
+              )}
+            </button>
+          </form>
+
+          <div style={{
+            marginTop: '24px',
+            padding: '12px',
+            background: '#F8FAFC',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            fontSize: '0.76rem',
+            color: '#64748B'
+          }}>
+            <strong>🔑 Acesso Padrão Inicial:</strong> Usuário: <code style={{ background: '#E2E8F0', padding: '2px 6px', borderRadius: '4px' }}>admin</code> | Senha: <code style={{ background: '#E2E8F0', padding: '2px 6px', borderRadius: '4px' }}>123456</code>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '20px 16px', maxWidth: '1400px', margin: '0 auto' }}>
       
@@ -325,21 +521,38 @@ export const AdminScreen: React.FC = () => {
           </div>
         </div>
 
-        <button 
-          onClick={loadAllAdminData}
-          className="btn"
-          style={{
-            background: '#334155',
-            color: '#F8FAFC',
-            border: '1px solid #475569',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            fontSize: '0.85rem'
-          }}
-        >
-          <RefreshCw size={16} />
-          Atualizar Dados
-        </button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button 
+            onClick={loadAllAdminData}
+            className="btn"
+            style={{
+              background: '#334155',
+              color: '#F8FAFC',
+              border: '1px solid #475569',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '0.85rem'
+            }}
+          >
+            <RefreshCw size={16} />
+            Atualizar Dados
+          </button>
+          <button 
+            onClick={() => setIsAdminAuthenticated(false)}
+            className="btn"
+            style={{
+              background: '#DC2626',
+              color: '#FFFFFF',
+              border: '1px solid #EF4444',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '0.85rem'
+            }}
+          >
+            <Lock size={16} />
+            Bloquear Acesso
+          </button>
+        </div>
       </div>
 
       {/* MENSAGEM DE ALERTA / SUCESSO */}
@@ -1033,7 +1246,76 @@ export const AdminScreen: React.FC = () => {
             </div>
 
             <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', fontSize: '0.95rem' }}>
-              <Save size={18} /> Salvar Todas as Configurações
+              <Save size={18} /> Salvar Configurações Comerciais
+            </button>
+          </form>
+
+          {/* ========================================================
+              FORMULÁRIO DE ALTERAÇÃO DE CREDENCIAIS DE SEGURANÇA
+              ======================================================== */}
+          <form onSubmit={handleChangeCredentials} className="card" style={{ padding: '24px', marginTop: '24px', border: '1px solid #CBD5E1' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Key size={20} color="#F59E0B" />
+              Segurança & Alteração de Credenciais do Administrador
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: '#64748B', marginBottom: '20px' }}>
+              Altere seu nome de usuário e senha de administrador para garantir total segurança e impedir acessos não autorizados por terceiros ou funcionários.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>Senha Atual do Admin *</label>
+                <input
+                  type="password"
+                  placeholder="Digite a senha atual (ex: 123456)"
+                  value={credForm.currentPassword}
+                  onChange={(e) => setCredForm({ ...credForm, currentPassword: e.target.value })}
+                  className="input"
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>Novo Nome de Usuário *</label>
+                <input
+                  type="text"
+                  placeholder="Ex: gerencia_admin"
+                  value={credForm.newUsername}
+                  onChange={(e) => setCredForm({ ...credForm, newUsername: e.target.value })}
+                  className="input"
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>Nova Senha *</label>
+                <input
+                  type="password"
+                  placeholder="Digite a nova senha de segurança"
+                  value={credForm.newPassword}
+                  onChange={(e) => setCredForm({ ...credForm, newPassword: e.target.value })}
+                  className="input"
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '4px' }}>Confirmar Nova Senha *</label>
+                <input
+                  type="password"
+                  placeholder="Repita a nova senha"
+                  value={credForm.confirmPassword}
+                  onChange={(e) => setCredForm({ ...credForm, confirmPassword: e.target.value })}
+                  className="input"
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn" style={{ width: '100%', padding: '12px', fontSize: '0.95rem', background: '#0F172A', color: '#FFFFFF' }}>
+              <Save size={18} /> Salvar Novas Credenciais do Admin
             </button>
           </form>
         </div>

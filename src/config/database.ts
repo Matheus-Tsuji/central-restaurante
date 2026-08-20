@@ -149,7 +149,7 @@ function seedDefaultData(): void {
       'INSERT INTO users (id, name, username, role, password_hash) VALUES (?, ?, ?, ?, ?)'
     );
 
-    insertUser.run('u_admin', 'Administrador Central', 'admin', 'ADMIN', hashPassword('admin123'));
+    insertUser.run('u_admin', 'Administrador Central', 'admin', 'ADMIN', hashPassword('123456'));
     insertUser.run('u_caixa', 'Caixa Principal', 'caixa', 'CASHIER', hashPassword('caixa123'));
     insertUser.run('u_garcom', 'Garçom João', 'garcom', 'WAITER', hashPassword('garcom123'));
     insertUser.run('u_cozinha', 'Cozinha Chefe', 'cozinha', 'KITCHEN', hashPassword('cozinha123'));

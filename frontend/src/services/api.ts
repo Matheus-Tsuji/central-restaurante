@@ -13,7 +13,7 @@ async function ensureAuth(role: 'ADMIN' | 'CASHIER' | 'WAITER' | 'KITCHEN' = 'AD
   isAuthenticating = true;
   try {
     const credsMap = {
-      ADMIN: { username: 'admin', password: 'admin123' },
+      ADMIN: { username: 'admin', password: '123456' },
       CASHIER: { username: 'caixa', password: 'caixa123' },
       WAITER: { username: 'garcom', password: 'garcom123' },
       KITCHEN: { username: 'cozinha', password: 'cozinha123' }
@@ -301,5 +301,29 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data)
     });
+  },
+
+  async changeAdminCredentials(data: { currentPassword: string; newUsername: string; newPassword: string }): Promise<any> {
+    return await fetchWithTimeout('/admin/change-credentials', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+
+  async login(username: string, password: string): Promise<any> {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Falha na autenticação.' }));
+      throw new Error(err.error || 'Usuário ou senha incorretos.');
+    }
+    const data = await res.json();
+    if (data.token) {
+      activeToken = data.token;
+    }
+    return data.user;
   }
 };
