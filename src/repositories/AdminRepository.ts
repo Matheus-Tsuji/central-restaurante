@@ -1,6 +1,6 @@
 import { db } from '../config/database.js';
 import { randomUUID } from 'node:crypto';
-import { hashPassword } from '../utils/crypto.js';
+import { hashPassword, verifyPassword } from '../utils/crypto.js';
 import { Table, MenuItem, InventoryItem } from '../models/types.js';
 
 export interface RestaurantSettings {
@@ -181,7 +181,7 @@ export class AdminRepository {
       throw new Error('Usuário administrador não encontrado.');
     }
 
-    if (hashPassword(data.currentPassword) !== adminUser.password_hash) {
+    if (!verifyPassword(data.currentPassword, adminUser.password_hash)) {
       throw new Error('A senha atual do Administrador está incorreta!');
     }
 

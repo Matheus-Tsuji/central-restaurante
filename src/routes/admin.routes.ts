@@ -189,7 +189,7 @@ router.put('/settings', (req, res, next) => {
 // ==========================================
 router.post('/change-credentials', (req: any, res, next) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.userId || req.user?.id;
     if (!userId) {
       return res.status(401).json({ error: 'Usuário não autenticado.' });
     }

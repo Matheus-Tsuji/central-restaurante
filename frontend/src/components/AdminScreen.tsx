@@ -156,6 +156,7 @@ export const AdminScreen: React.FC = () => {
         newUsername: credForm.newUsername.trim(),
         newPassword: credForm.newPassword
       });
+      setLoginUser(credForm.newUsername.trim());
       showMessage('success', '✅ Credenciais de Administrador alteradas com sucesso! Guarde seu novo usuário e senha.');
       setCredForm({ currentPassword: '', newUsername: '', newPassword: '', confirmPassword: '' });
     } catch (err: any) {
