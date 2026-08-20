@@ -6,6 +6,7 @@ import { initDatabase } from './config/database.js';
 import { initSocketIO } from './sockets/socketManager.js';
 import apiRoutes from './routes/index.js';
 import { errorHandler } from './middlewares/errorHandler.js';
+import { initMDNS, stopMDNS } from './utils/mdns.js';
 
 // Inicializar banco de dados SQLite com tabelas e dados prévios
 initDatabase();
@@ -39,6 +40,19 @@ app.use(errorHandler);
 const PORT = Number(env.PORT) || 3000;
 
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor Central rodando em http://localhost:${PORT} e http://192.168.0.172:${PORT}`);
+  console.log(`🚀 Servidor Central rodando em http://localhost:${PORT}`);
   console.log(`📡 WebSocket Socket.IO pronto para conexões na rede local.`);
+  
+  // Ativar servidor mDNS (Bonjour ZeroConf) para resolver restaurante.local automaticamente na rede Wi-Fi
+  initMDNS(5173, PORT);
+});
+
+process.on('SIGINT', () => {
+  stopMDNS();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  stopMDNS();
+  process.exit(0);
 });

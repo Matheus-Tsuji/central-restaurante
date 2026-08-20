@@ -17,6 +17,7 @@
   "type": "module",
   "dependencies": {
     "better-sqlite3": "^13.0.3",
+    "bonjour-service": "^1.4.4",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
