@@ -8,14 +8,24 @@ pessoa, mesmo sem conhecimentos técnicos em informática, possa operar o sistem
 com facilidade, segurança e rapidez.
 
 --------------------------------------------------------------------------------
-1. REQUISITO FUNDAMENTAL DE REDE (WI-FI)
+1. REQUISITO FUNDAMENTAL DE REDE (WI-FI SEM NECESSIDADE DE INTERNET)
 --------------------------------------------------------------------------------
 Para que os celulares dos garçons, tablets da cozinha e computadores conversa-
 rem entre si em tempo real, TODOS os aparelhos DEVEM estar conectados exatamente
 na mesma rede Wi-Fi do seu estabelecimento.
 
-[ DICA ]: Certifique-se de que o computador principal (onde o sistema está instalado)
-e os celulares dos garçons estão conectados no mesmo nome de Wi-Fi (roteador).
+[ ATENÇÃO - IMPORTANTE ]:
+O SEU ROTEADOR WI-FI NÃO PRECISA TER CONEXÃO COM A INTERNET (PROVEDOR/OPERADORA)!
+O roteador só precisa estar LIGADO na tomada transmitindo o sinal Wi-Fi para criar
+a rede local de transferência de dados.
+
+Sim! Mesmo se a sua internet da rua cair ou o provedor estiver fora do ar, o
+sistema CONTINUA FUNCIONANDO 100% PERFEITAMENTE. Toda a comunicação de pedidos,
+cozinha e caixa acontece diretamente entre os aparelhos dentro do estabelecimento,
+sem gastar dados e sem precisar de internet externa!
+
+[ DICA ]: Certifique-se apenas de que o computador principal (onde o sistema está
+instalado) e os celulares dos garçons estão conectados no mesmo nome de Wi-Fi.
 
 
 --------------------------------------------------------------------------------
@@ -110,6 +120,9 @@ organizados por datas na pasta oficial na sua Área de Trabalho:
 --------------------------------------------------------------------------------
 6. PERGUNTAS FREQUENTES & RESOLUÇÃO DE PROBLEMAS
 --------------------------------------------------------------------------------
+Q: Preciso ter internet da operadora/provedor para o sistema funcionar no restaurante?
+R: Não! O Wi-Fi não precisa de internet ativa. Ele só precisa estar ligado na tomada para conectar os aparelhos entre si na rede local. O sistema é 100% funcional offline.
+
 Q: O celular do garçom fica carregando infinitamente e não abre a página. O que fazer?
 R: 1. Verifique se o Wi-Fi do celular é exatamente o mesmo Wi-Fi do computador.
    2. Verifique se digitou a porta ":3000" no final do endereço (ex: http://192.168.0.172:3000).
