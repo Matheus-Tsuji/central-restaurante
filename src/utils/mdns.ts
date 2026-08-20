@@ -4,6 +4,8 @@ import os from 'node:os';
 let instance: Bonjour | null = null;
 
 export function initMDNS(frontendPort = 5173, backendPort = 3000): void {
+  const hostname = os.hostname();
+
   try {
     instance = new Bonjour();
 
@@ -22,9 +24,10 @@ export function initMDNS(frontendPort = 5173, backendPort = 3000): void {
       host: 'restaurante.local'
     });
 
-    console.log('🌐 Servidor DNS Local (mDNS / Bonjour ZeroConf) Ativado:');
-    console.log(`   📱 Garçons / Celulares podem acessar via: http://restaurante.local:${frontendPort}`);
-    console.log(`   ⚙️ API / Backend acessível via: http://restaurante.local:${backendPort}`);
+    console.log('🌐 Servidor DNS Local (mDNS / Bonjour) Ativo na Rede Wi-Fi:');
+    console.log(`   📱 Opção 1 (DNS mDNS):      http://restaurante.local:${frontendPort}`);
+    console.log(`   💻 Opção 2 (Host Nativo):   http://${hostname.toLowerCase()}.local:${frontendPort}`);
+    console.log(`   💡 DICA IMPORTANTE NO CELULAR: Digite sempre "http://" antes do endereço no navegador do celular!`);
   } catch (err) {
     console.warn('⚠️ Não foi possível registrar o serviço mDNS no sistema:', err);
   }
