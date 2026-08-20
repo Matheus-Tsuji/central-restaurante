@@ -17,7 +17,7 @@ function createWindow() {
     fullscreen: true,
     autoHideMenuBar: true,
     title: 'Central Restaurante S.A.',
-    icon: path.join(__dirname, 'build', 'icon.png'),
+    icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true
