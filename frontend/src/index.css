@@ -222,7 +222,26 @@ h1, h2, h3, h4, h5, h6 {
     overflow-x: auto;
     white-space: nowrap;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
+    padding-bottom: 6px;
+  }
+
+  /* Barra de Rolagem da Navegação Mobile Estilizada */
+  .nav-tabs-mobile::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .nav-tabs-mobile::-webkit-scrollbar-track {
+    background: #090D16;
+    border-radius: 10px;
+  }
+
+  .nav-tabs-mobile::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 10px;
+  }
+
+  .nav-tabs-mobile::-webkit-scrollbar-thumb:hover {
+    background: #475569;
   }
 
   .nav-tabs-mobile button {

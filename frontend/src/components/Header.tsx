@@ -46,22 +46,19 @@ export const Header: React.FC<HeaderProps> = ({
             src="/icon.png" 
             alt="Logo CR" 
             onError={(e) => {
-              // Fallback para favicon.ico se icon.png falhar
               (e.target as HTMLImageElement).src = '/favicon.ico';
             }}
             style={{
               width: '42px',
               height: '42px',
-              borderRadius: '10px',
-              objectFit: 'cover',
-              border: '2px solid #F59E0B',
-              boxShadow: '0 0 12px rgba(245, 158, 11, 0.4)',
-              background: '#020617'
+              borderRadius: '8px',
+              objectFit: 'contain',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)'
             }} 
           />
           <div>
-            <h1 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#F8FAFC', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
-              Central Restaurante <span style={{ color: '#F59E0B', fontSize: '0.8rem', fontWeight: 700 }}>PRO</span>
+            <h1 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#F8FAFC', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+              Central de Restaurante
             </h1>
             <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 500 }}>
               Sistema de Gestão & Operação Multi-telas
