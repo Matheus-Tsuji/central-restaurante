@@ -94,7 +94,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log('======================================================================\n');
   
   // Ativar servidor mDNS (Bonjour ZeroConf)
-  initMDNS(5173, PORT);
+  initMDNS(PORT, PORT);
 });
 
 process.on('SIGINT', () => {

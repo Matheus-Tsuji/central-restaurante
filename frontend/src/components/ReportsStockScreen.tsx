@@ -71,8 +71,8 @@ export const ReportsStockScreen: React.FC = () => {
       setSystemInfo(sys);
       setConnectedDevices(sys.connected_devices || []);
 
-      // Usar a URL do frontend na porta 5173 para o QR Code
-      const frontendTargetUrl = sys.frontend_url || `http://${window.location.hostname}:5173`;
+      // Usar a URL direta do aplicativo na porta 3000 para o QR Code
+      const frontendTargetUrl = sys.frontend_url || `http://${window.location.hostname}:3000`;
       QRCode.toDataURL(frontendTargetUrl, { width: 260, margin: 2, color: { dark: '#0F172A', light: '#FFFFFF' } }, (err, url) => {
         if (!err && url) {
           setQrCodeDataUrl(url);
