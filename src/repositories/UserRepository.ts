@@ -24,4 +24,8 @@ export class UserRepository {
 
     return this.findById(user.id)!;
   }
+
+  static updatePassword(id: string, newHash: string): void {
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, id);
+  }
 }

@@ -1,6 +1,6 @@
 import Database, { type Database as SqliteDatabase } from 'better-sqlite3';
 import { env } from './env.js';
-import { hashPassword } from '../utils/crypto.js';
+import { hashPassword, verifyPassword } from '../utils/crypto.js';
 import { randomUUID } from 'node:crypto';
 
 import path from 'node:path';
@@ -154,6 +154,14 @@ function seedDefaultData(): void {
     insertUser.run('u_garcom', 'Garçom João', 'garcom', 'WAITER', hashPassword('garcom123'));
     insertUser.run('u_cozinha', 'Cozinha Chefe', 'cozinha', 'KITCHEN', hashPassword('cozinha123'));
     console.log('✅ Usuários iniciais cadastrados (admin, caixa, garcom, cozinha).');
+  } else {
+    // Garante migração da senha inicial do admin caso o banco já existisse
+    const existingAdmin = db.prepare("SELECT * FROM users WHERE username = 'admin' OR role = 'ADMIN'").get() as any;
+    if (existingAdmin && verifyPassword('admin123', existingAdmin.password_hash)) {
+      const newHash = hashPassword('123456');
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, existingAdmin.id);
+      console.log('🔑 Senha do administrador atualizada automaticamente para: 123456');
+    }
   }
 
   // Seed Mesas (1 a 10) se não existirem
