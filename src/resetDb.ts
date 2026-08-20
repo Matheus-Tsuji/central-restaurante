@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { env } from './config/env.js';
 import { initDatabase } from './config/database.js';
+import { getDocumentsRootDir } from './utils/documentPaths.js';
 
 const db = new Database(env.DB_PATH);
 
@@ -26,14 +27,25 @@ initDatabase();
 console.log('✅ BANCO DE DADOS ZERADO E CARDÁPIO COMPLETO REPOPULADO!');
 console.log('📊 Faturamento: R$ 0.00 | Pedidos encerrados: 0 | Mesas: Todas LIVRES.');
 
-const receiptsDir = path.join(process.cwd(), 'comprovantes_mesas');
-if (fs.existsSync(receiptsDir)) {
-  fs.readdirSync(receiptsDir).forEach(file => fs.unlinkSync(path.join(receiptsDir, file)));
-  console.log('📄 Pasta comprovantes_mesas/ limpa com sucesso!');
+const rootDir = getDocumentsRootDir();
+const receiptsDir = path.join(rootDir, 'comprovantes_mesas');
+const reportsDir = path.join(rootDir, 'relatorios_expediente');
+
+function removeDirRecursive(targetPath: string) {
+  if (fs.existsSync(targetPath)) {
+    fs.readdirSync(targetPath).forEach(file => {
+      const curPath = path.join(targetPath, file);
+      if (fs.lstatSync(curPath).isDirectory()) {
+        removeDirRecursive(curPath);
+        fs.rmdirSync(curPath);
+      } else {
+        fs.unlinkSync(curPath);
+      }
+    });
+  }
 }
 
-const reportsDir = path.join(process.cwd(), 'relatorios_expediente');
-if (fs.existsSync(reportsDir)) {
-  fs.readdirSync(reportsDir).forEach(file => fs.unlinkSync(path.join(reportsDir, file)));
-  console.log('📄 Pasta relatorios_expediente/ limpa com sucesso!');
-}
+removeDirRecursive(receiptsDir);
+removeDirRecursive(reportsDir);
+
+console.log(`📄 Arquivos e pastas na Área de Trabalho (${rootDir}) limpos com sucesso!`);

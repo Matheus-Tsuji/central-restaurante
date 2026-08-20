@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { TableBillSummary, PaymentMethod } from '../models/types.js';
+import { getReceiptsDirForDate } from './documentPaths.js';
 
 export function generateReceiptTxt(
   tableBill: TableBillSummary,
@@ -9,13 +10,9 @@ export function generateReceiptTxt(
   cashierName: string = 'Caixa Principal',
   includeTip: boolean = false
 ): { filePath: string; receiptContent: string } {
-  const dirPath = path.join(process.cwd(), 'comprovantes_mesas');
-
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
-  }
-
   const now = new Date();
+  const dirPath = getReceiptsDirForDate(now);
+
   const dateFormatted = now.toLocaleDateString('pt-BR');
   const timeFormatted = now.toLocaleTimeString('pt-BR');
   const timestampStr = now.toISOString().replace(/[:.]/g, '-');
@@ -86,7 +83,7 @@ TROCO DEVOLVIDO:                       R$${changeGiven.toFixed(2).padStart(8, ' 
 `;
 
   fs.writeFileSync(filePath, receiptContent, 'utf-8');
-  console.log(`📄 Cupom fiscal da Mesa ${tableNumber} gravado em: ${filePath}`);
+  console.log(`📄 Cupom fiscal da Mesa ${tableNumber} gravado na Área de Trabalho em: ${filePath}`);
 
   return { filePath, receiptContent };
 }

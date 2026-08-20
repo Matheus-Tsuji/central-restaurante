@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { getReportsDirForDate } from './documentPaths.js';
 
 export function generateExpedientReportTxt(expedientData: {
   closed_at: string;
@@ -7,13 +8,9 @@ export function generateExpedientReportTxt(expedientData: {
   analytics: any;
   inventory_consumed: any[];
 }): { filePath: string; reportContent: string } {
-  const dirPath = path.join(process.cwd(), 'relatorios_expediente');
-
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
-  }
-
   const d = new Date(expedientData.closed_at);
+  const dirPath = getReportsDirForDate(d);
+
   const dateFormatted = d.toLocaleDateString('pt-BR');
   const timeFormatted = d.toLocaleTimeString('pt-BR');
   const timestampStr = d.toISOString().replace(/[:.]/g, '-');
@@ -94,7 +91,7 @@ ${tableDetailLines}================================================-------------
 `;
 
   fs.writeFileSync(filePath, reportContent, 'utf-8');
-  console.log(`📄 Relatório de Expediente gravado em: ${filePath}`);
+  console.log(`📄 Relatório de Expediente gravado na Área de Trabalho em: ${filePath}`);
 
   return { filePath, reportContent };
 }
