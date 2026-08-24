@@ -78,6 +78,21 @@ export class CashierController {
     }
   }
 
+  static async printTableBill(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const tableId = req.params.tableId as string;
+      const cashierName = req.user?.name || 'Caixa Principal';
+      const result = CashierService.generateTablePreBill(tableId, cashierName);
+      res.json({
+        success: true,
+        receipt_file: result.filePath,
+        receipt_text: result.receiptContent
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async getDailyReport(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const dateStr = req.query.date as string | undefined;

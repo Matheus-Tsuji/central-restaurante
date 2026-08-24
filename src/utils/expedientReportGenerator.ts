@@ -61,7 +61,7 @@ Horário do Encerramento: ${timeFormatted}
 
 1. RESUMO FINANCEIRO E TAXAS DE SERVIÇO (10%)
 ----------------------------------------------------------------------
-💰 FATURAMENTO TOTAL GERAL (COM 10%):  R$ ${report.total_sales?.toFixed(2) || '0.00'}
+💰 FATURAMENTO TOTAL:                  R$ ${report.total_sales?.toFixed(2) || '0.00'}
 🍽️ TOTAL SÓ SEM OS 10% (CONSUMO):     R$ ${report.total_sales_subtotal?.toFixed(2) || '0.00'}
 🎯 TOTAL SÓ OS 10% (TAXA DE SERVIÇO):   R$ ${report.total_sales_tips?.toFixed(2) || '0.00'}
 ----------------------------------------------------------------------

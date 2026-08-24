@@ -81,6 +81,7 @@ export interface Order {
   total_amount: number;
   notes?: string;
   offline_sync_id?: string;
+  cashier_session_id?: string;
   items?: OrderItem[];
   created_at: string;
   updated_at: string;

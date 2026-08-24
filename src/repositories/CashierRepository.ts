@@ -3,7 +3,7 @@ import { CashRegisterSession, Payment, PaymentMethod, DailyReport } from '../mod
 import { TableRepository } from './TableRepository.js';
 import { OrderRepository } from './OrderRepository.js';
 import { InventoryRepository } from './InventoryRepository.js';
-import { generateReceiptTxt } from '../utils/receiptGenerator.js';
+import { generateReceiptTxt, generatePreBillReceiptTxt } from '../utils/receiptGenerator.js';
 import { generateExpedientReportTxt } from '../utils/expedientReportGenerator.js';
 import { randomUUID } from 'node:crypto';
 
@@ -59,6 +59,18 @@ export class CashierRepository {
 
     const closed = db.prepare('SELECT * FROM cashier_sessions WHERE id = ?').get(sessionId) as CashRegisterSession;
     return closed;
+  }
+
+  static generateTablePreBill(tableId: string, cashierName: string = 'Operador Caixa'): { filePath: string; receiptContent: string } {
+    const tableBill = OrderRepository.getTableBill(tableId);
+    if (!tableBill || tableBill.orders.length === 0) {
+      throw new Error('Nenhum pedido aberto encontrado para esta mesa.');
+    }
+
+    const session = this.getActiveSession();
+    const opName = session?.opened_by_name || cashierName;
+
+    return generatePreBillReceiptTxt(tableBill, opName);
   }
 
   static processPayment(
@@ -133,7 +145,7 @@ export class CashierRepository {
       }
 
       for (const order of tableBill.orders) {
-        db.prepare("UPDATE orders SET status = 'CLOSED', updated_at = datetime('now', 'localtime') WHERE id = ?").run(order.id);
+        db.prepare("UPDATE orders SET status = 'CLOSED', cashier_session_id = ?, updated_at = datetime('now', 'localtime') WHERE id = ?").run(session!.id, order.id);
       }
 
       TableRepository.updateStatus(tableId, 'FREE');
@@ -220,11 +232,10 @@ export class CashierRepository {
       PIX: 0
     };
 
-    // Se a sessão mais recente estiver FECHADA (expediente do dia encerrado), zera o relatório no frontend para o novo turno!
-    if (!session || session.status === 'CLOSED') {
+    if (!session) {
       return {
         date: targetDate,
-        cashier_session: session || null,
+        cashier_session: null,
         total_sales: 0,
         total_sales_subtotal: 0,
         total_sales_tips: 0,
@@ -255,10 +266,10 @@ export class CashierRepository {
       FROM orders o
       JOIN tables t ON t.id = o.table_id
       JOIN users u ON u.id = o.waiter_id
-      JOIN payments p ON p.order_id = o.id
-      WHERE p.cashier_session_id = ? AND o.status = 'CLOSED'
+      WHERE (o.cashier_session_id = ? OR o.id IN (SELECT order_id FROM payments WHERE cashier_session_id = ?))
+        AND o.status = 'CLOSED'
       ORDER BY o.updated_at ASC
-    `).all(session.id) as { order_id: string; total_amount: number; closed_at: string; table_number: number; waiter_name: string }[];
+    `).all(session.id, session.id) as { order_id: string; total_amount: number; closed_at: string; table_number: number; waiter_name: string }[];
 
     const getItemDetails = db.prepare(`
       SELECT mi.name, oi.quantity, oi.unit_price, oi.total_price
@@ -310,19 +321,23 @@ export class CashierRepository {
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = 'CLOSED' AND mi.category != 'Bebidas'
+      WHERE o.status = 'CLOSED' 
+        AND mi.category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+        AND mi.category NOT LIKE '%Drink%'
+        AND mi.category NOT LIKE '%Bebida%'
       GROUP BY mi.id
       ORDER BY total_qty DESC
       LIMIT 1
     `).get() as { name: string; total_qty: number; total_revenue: number } | undefined;
 
-    // 2. Bebida Mais Vendida
+    // 2. Bebida Mais Vendida (Bebidas e Drinks)
     const topDrink = db.prepare(`
       SELECT mi.name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as total_revenue
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = 'CLOSED' AND mi.category = 'Bebidas'
+      WHERE o.status = 'CLOSED' 
+        AND (mi.category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida') OR mi.category LIKE '%Drink%' OR mi.category LIKE '%Bebida%')
       GROUP BY mi.id
       ORDER BY total_qty DESC
       LIMIT 1
@@ -370,13 +385,14 @@ export class CashierRepository {
       updateInv.run(item.total_consumed, item.id);
     }
 
+    // Obter relatório completo da sessão do dia
+    const report = this.getDailyReport(targetDate);
+
     // Encerrar sessão ativa de caixa se houver
     const activeSession = this.getActiveSession();
     if (activeSession) {
       this.closeSession(activeSession.id, userId, activeSession.total_sales);
     }
-
-    const report = this.getDailyReport(targetDate);
 
     const fullExpedientData = {
       closed_at: new Date().toISOString(),
@@ -385,7 +401,7 @@ export class CashierRepository {
         top_food: topFood || { name: 'Nenhum prato vendido', total_qty: 0, total_revenue: 0 },
         top_drink: topDrink || { name: 'Nenhuma bebida vendida', total_qty: 0, total_revenue: 0 },
         top_table: topTable || { table_number: 0, total_revenue: 0 },
-        top_payment: topPayment || { payment_method: 'N/A', total_revenue: 0 }
+        top_payment: topPayment || { payment_method: 'N/A' as PaymentMethod, total_revenue: 0 }
       },
       inventory_consumed: consumedInventory
     };

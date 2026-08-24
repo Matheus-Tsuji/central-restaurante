@@ -44,6 +44,10 @@ export class CashierService {
     return CashierRepository.getReceiptByOrderId(orderId);
   }
 
+  static generateTablePreBill(tableId: string, cashierName?: string): { filePath: string; receiptContent: string } {
+    return CashierRepository.generateTablePreBill(tableId, cashierName);
+  }
+
   static getDailyReport(dateStr?: string): DailyReport {
     return CashierRepository.getDailyReport(dateStr);
   }

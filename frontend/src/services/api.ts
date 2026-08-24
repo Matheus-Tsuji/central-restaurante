@@ -159,6 +159,10 @@ export const api = {
     return await fetchWithTimeout(`/cashier/receipt/order/${orderId}`);
   },
 
+  async printTableBill(tableId: string): Promise<{ success: boolean; receipt_text: string; receipt_file: string }> {
+    return await fetchWithTimeout(`/cashier/table-bill/${tableId}/print`);
+  },
+
   async getDailyReport(): Promise<DailyReport> {
     try {
       return await fetchWithTimeout('/cashier/report');

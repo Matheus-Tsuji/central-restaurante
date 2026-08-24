@@ -74,10 +74,12 @@ export function initDatabase(): void {
       total_amount REAL NOT NULL DEFAULT 0,
       notes TEXT,
       offline_sync_id TEXT UNIQUE,
+      cashier_session_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY (table_id) REFERENCES tables(id),
-      FOREIGN KEY (waiter_id) REFERENCES users(id)
+      FOREIGN KEY (waiter_id) REFERENCES users(id),
+      FOREIGN KEY (cashier_session_id) REFERENCES cashier_sessions(id)
     );
 
     CREATE TABLE IF NOT EXISTS order_items (
@@ -137,6 +139,18 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
     CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(cashier_session_id);
   `);
+
+  // Migração segura para garantir existência de cashier_session_id em bases já criadas
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(orders)").all() as { name: string }[];
+    const hasCashierSessionId = tableInfo.some(col => col.name === 'cashier_session_id');
+    if (!hasCashierSessionId) {
+      db.exec("ALTER TABLE orders ADD COLUMN cashier_session_id TEXT;");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_orders_session ON orders(cashier_session_id);");
+  } catch (migErr) {
+    console.warn('Aviso na verificação de colunas da tabela orders:', migErr);
+  }
 
   seedDefaultData();
 }

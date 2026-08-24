@@ -4,6 +4,7 @@ import type { DailyReport, InventoryItem, SystemInfo, ConnectedDevice } from '..
 import { api } from '../services/api';
 import { socket } from '../services/socket';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateUtils';
+import { printReceiptContent } from '../utils/printUtils';
 import { TrendingUp, Package, AlertTriangle, Calendar, Award, RefreshCw, Printer, X, ShieldAlert, CheckCircle2, Lock, Flame, Utensils, Wine, Trophy, CreditCard, FileText, Percent, ShoppingBag, Smartphone, Monitor, Tv, Wifi, Copy, Check } from 'lucide-react';
 
 export const ReportsStockScreen: React.FC = () => {
@@ -314,7 +315,7 @@ export const ReportsStockScreen: React.FC = () => {
             <div style={{ background: '#FEE2E2', padding: '14px', borderRadius: 'var(--radius-sm)', color: '#991B1B', fontSize: '0.88rem', lineHeight: '1.5' }}>
               <strong>Tem certeza de que deseja encerrar o expediente de hoje ({formatDateBR(report?.date)})?</strong>
               <ul style={{ marginTop: '8px', paddingLeft: '20px', fontSize: '0.82rem' }}>
-                <li>Discriminará o Faturamento Total Geral, Total Só Sem 10% e Total Só 10%.</li>
+                <li>Discriminará o Faturamento Total, Total Só Sem 10% e Total Só 10%.</li>
                 <li>Irá abater fisicamente no estoque o consumo em gramas e unidades dos pratos vendidos.</li>
                 <li>Irá gerar o documento oficial em <code>.TXT</code> na pasta <code>relatorios_expediente/</code>.</li>
               </ul>
@@ -412,7 +413,7 @@ export const ReportsStockScreen: React.FC = () => {
             {/* CARD DESTACADO: FATURAMENTO TOTAL, SÓ SEM 10% E SÓ 10% */}
             <div style={{ background: 'var(--bg-subtle)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>💰 FATURAMENTO TOTAL GERAL (COM 10%)</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>💰 FATURAMENTO TOTAL</span>
                 <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--accent-emerald)' }}>
                   R$ {expedientResult.report.total_sales?.toFixed(2) || '0.00'}
                 </span>
@@ -572,9 +573,18 @@ export const ReportsStockScreen: React.FC = () => {
               {reportTxtModal}
             </pre>
 
-            <button onClick={() => setReportTxtModal(null)} className="btn btn-primary" style={{ width: '100%' }}>
-              Fechar Visualizador TXT
-            </button>
+            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+              <button
+                onClick={() => printReceiptContent(reportTxtModal, 'Relatório do Expediente')}
+                className="btn btn-success"
+                style={{ flex: 1, padding: '10px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <Printer size={16} /> Imprimir na Impressora
+              </button>
+              <button onClick={() => setReportTxtModal(null)} className="btn btn-outline" style={{ flex: 1, padding: '10px', fontSize: '0.9rem' }}>
+                Fechar Visualizador TXT
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -634,9 +644,18 @@ export const ReportsStockScreen: React.FC = () => {
               {receiptText}
             </pre>
 
-            <button onClick={() => setReceiptText(null)} className="btn btn-primary" style={{ width: '100%' }}>
-              Fechar Cupom
-            </button>
+            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+              <button
+                onClick={() => printReceiptContent(receiptText, 'Cupom')}
+                className="btn btn-success"
+                style={{ flex: 1, padding: '10px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <Printer size={16} /> Imprimir na Impressora
+              </button>
+              <button onClick={() => setReceiptText(null)} className="btn btn-outline" style={{ flex: 1, padding: '10px', fontSize: '0.9rem' }}>
+                Fechar Cupom
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -700,13 +719,13 @@ export const ReportsStockScreen: React.FC = () => {
         {/* Metric Cards Responsivos com Faturamento Geral, Só Sem 10% e Só os 10% */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
           
-          {/* Card 1: Faturamento Total Geral */}
+          {/* Card 1: Faturamento Total */}
           <div className="clean-card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', borderLeft: '4px solid var(--accent-emerald)' }}>
             <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-md)', background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <TrendingUp size={22} />
             </div>
             <div>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Faturamento Total (Com 10%)</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Faturamento Total</span>
               <h2 style={{ fontSize: '1.35rem', color: 'var(--text-primary)' }}>
                 R$ {report?.total_sales.toFixed(2) || '0.00'}
               </h2>

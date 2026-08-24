@@ -87,3 +87,72 @@ TROCO DEVOLVIDO:                       R$${changeGiven.toFixed(2).padStart(8, ' 
 
   return { filePath, receiptContent };
 }
+
+export function generatePreBillReceiptTxt(
+  tableBill: TableBillSummary,
+  cashierName: string = 'Caixa Principal'
+): { filePath: string; receiptContent: string } {
+  const now = new Date();
+  const dirPath = getReceiptsDirForDate(now);
+
+  const dateFormatted = now.toLocaleDateString('pt-BR');
+  const timeFormatted = now.toLocaleTimeString('pt-BR');
+  const timestampStr = now.toISOString().replace(/[:.]/g, '-');
+
+  const tableNumber = String(tableBill.table.number).padStart(2, '0');
+  const fileName = `PreConta_Mesa_${tableNumber}_${timestampStr}.txt`;
+  const filePath = path.join(dirPath, fileName);
+
+  const waiterName = tableBill.orders[0]?.waiter_name || 'Garçom';
+
+  let itemsLines = '';
+  tableBill.items_summary.forEach((item, index) => {
+    const itemNum = String(index + 1).padStart(3, '0');
+    const namePadded = item.name.padEnd(22, ' ').substring(0, 22);
+    const qtyPadded = `${item.quantity}x`.padStart(4, ' ');
+    const unitPadded = `R$${item.unit_price.toFixed(2)}`.padStart(9, ' ');
+    const totalPadded = `R$${item.total_price.toFixed(2)}`.padStart(10, ' ');
+
+    itemsLines += `${itemNum} ${namePadded} ${qtyPadded} ${unitPadded} ${totalPadded}\n`;
+  });
+
+  const subtotal = tableBill.total_amount;
+  const tipAmount = Number((subtotal * 0.10).toFixed(2));
+  const grandTotalWithTip = Number((subtotal + tipAmount).toFixed(2));
+
+  const receiptContent = `================================================
+           CENTRAL RESTAURANTE S.A.             
+       CNPJ: 12.345.678/0001-90 - IE: ISENTO    
+  Av. Principal, 1000 - Centro - São Paulo/SP   
+           Tel: (11) 99999-8888                 
+================================================
+         CONTA DA MESA / PRÉ-CONTA             
+================================================
+Mesa: ${tableNumber} (${tableBill.table.name})
+Data: ${dateFormatted} ${timeFormatted}
+Atendente: ${waiterName}
+Operador Caixa: ${cashierName}
+------------------------------------------------
+ITEM  DESCRIÇÃO               QTD   VL.UNIT      TOTAL
+------------------------------------------------
+${itemsLines}------------------------------------------------
+SUBTOTAL (SEM 10%):                   R$${subtotal.toFixed(2).padStart(8, ' ')}
+TAXA DE SERVIÇO (10% GARÇOM):         R$${tipAmount.toFixed(2).padStart(8, ' ')}
+------------------------------------------------
+VALOR TOTAL SEM 10%:                  R$${subtotal.toFixed(2).padStart(8, ' ')}
+VALOR TOTAL COM 10%:                  R$${grandTotalWithTip.toFixed(2).padStart(8, ' ')}
+================================================
+    *** DOCUMENTO PARA SIMPLES CONFERÊNCIA ***   
+             NÃO É DOCUMENTO FISCAL             
+================================================
+         Obrigado pela sua preferência!         
+              Volte Sempre!                     
+================================================
+`;
+
+  fs.writeFileSync(filePath, receiptContent, 'utf-8');
+  console.log(`📄 Pré-conta da Mesa ${tableNumber} gravada na Área de Trabalho em: ${filePath}`);
+
+  return { filePath, receiptContent };
+}
+

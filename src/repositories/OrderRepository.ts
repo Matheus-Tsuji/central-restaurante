@@ -57,7 +57,7 @@ export class OrderRepository {
   }
 
   static findKitchenOrders(): Order[] {
-    // Fila da Cozinha: apenas pedidos que contêm pratos/comidas (category != 'Bebidas')
+    // Fila da Cozinha: apenas pedidos que contêm pratos/comidas
     const orders = db.prepare(`
       SELECT DISTINCT o.*, t.number as table_number, u.name as waiter_name
       FROM orders o
@@ -67,7 +67,9 @@ export class OrderRepository {
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       WHERE oi.status IN ('PENDING', 'PREPARING') 
         AND o.status NOT IN ('CLOSED', 'CANCELLED')
-        AND mi.category != 'Bebidas'
+        AND mi.category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+        AND mi.category NOT LIKE '%Drink%'
+        AND mi.category NOT LIKE '%Bebida%'
       ORDER BY o.created_at ASC
     `).all() as (Order & { table_number: number; waiter_name: string })[];
 
@@ -75,7 +77,10 @@ export class OrderRepository {
       SELECT oi.*, mi.name as menu_item_name, mi.category
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
-      WHERE oi.order_id = ? AND oi.status IN ('PENDING', 'PREPARING', 'READY') AND mi.category != 'Bebidas'
+      WHERE oi.order_id = ? AND oi.status IN ('PENDING', 'PREPARING', 'READY') 
+        AND mi.category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+        AND mi.category NOT LIKE '%Drink%'
+        AND mi.category NOT LIKE '%Bebida%'
     `);
 
     return orders.map(order => ({
@@ -85,7 +90,7 @@ export class OrderRepository {
   }
 
   static findBarOrders(): Order[] {
-    // Fila do Bar: apenas pedidos que contêm bebidas (category = 'Bebidas')
+    // Fila do Bar: apenas pedidos que contêm bebidas e drinks
     const orders = db.prepare(`
       SELECT DISTINCT o.*, t.number as table_number, u.name as waiter_name
       FROM orders o
@@ -95,7 +100,7 @@ export class OrderRepository {
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       WHERE oi.status IN ('PENDING', 'PREPARING') 
         AND o.status NOT IN ('CLOSED', 'CANCELLED')
-        AND mi.category = 'Bebidas'
+        AND (mi.category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida') OR mi.category LIKE '%Drink%' OR mi.category LIKE '%Bebida%')
       ORDER BY o.created_at ASC
     `).all() as (Order & { table_number: number; waiter_name: string })[];
 
@@ -103,7 +108,8 @@ export class OrderRepository {
       SELECT oi.*, mi.name as menu_item_name, mi.category
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
-      WHERE oi.order_id = ? AND oi.status IN ('PENDING', 'PREPARING', 'READY') AND mi.category = 'Bebidas'
+      WHERE oi.order_id = ? AND oi.status IN ('PENDING', 'PREPARING', 'READY') 
+        AND (mi.category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida') OR mi.category LIKE '%Drink%' OR mi.category LIKE '%Bebida%')
     `);
 
     return orders.map(order => ({
@@ -210,13 +216,23 @@ export class OrderRepository {
       db.prepare(`
         UPDATE order_items
         SET status = ?
-        WHERE order_id = ? AND menu_item_id IN (SELECT id FROM menu_items WHERE category != 'Bebidas')
+        WHERE order_id = ? AND menu_item_id IN (
+          SELECT id FROM menu_items 
+          WHERE category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+            AND category NOT LIKE '%Drink%'
+            AND category NOT LIKE '%Bebida%'
+        )
       `).run(status, orderId);
     } else if (filterType === 'DRINK' || filterType === 'BAR') {
       db.prepare(`
         UPDATE order_items
         SET status = ?
-        WHERE order_id = ? AND menu_item_id IN (SELECT id FROM menu_items WHERE category = 'Bebidas')
+        WHERE order_id = ? AND menu_item_id IN (
+          SELECT id FROM menu_items 
+          WHERE category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+             OR category LIKE '%Drink%'
+             OR category LIKE '%Bebida%'
+        )
       `).run(status, orderId);
     } else {
       db.prepare(`

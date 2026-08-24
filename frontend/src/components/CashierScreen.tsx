@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Table } from '../types';
 import { api } from '../services/api';
 import { formatDateTimeBR } from '../utils/dateUtils';
+import { printReceiptContent } from '../utils/printUtils';
 import { DollarSign, CreditCard, QrCode, Receipt, CheckCircle2, AlertCircle, RefreshCw, Printer, X, Plus, Minus, Trash2, Layers, Clock, ShieldCheck, Edit3, Percent } from 'lucide-react';
 
 type PaymentMethodType = 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'PIX';
@@ -122,6 +123,17 @@ export const CashierScreen: React.FC = () => {
       }
     } catch (err: any) {
       alert(`Erro ao reemitir cupom: ${err.message}`);
+    }
+  }
+
+  async function handlePrintPreBill(tableId: string) {
+    try {
+      const res = await api.printTableBill(tableId);
+      if (res.receipt_text) {
+        setReceiptText(res.receipt_text);
+      }
+    } catch (err: any) {
+      alert(`Erro ao gerar pré-conta da mesa: ${err.message}`);
     }
   }
 
@@ -427,9 +439,22 @@ export const CashierScreen: React.FC = () => {
               {receiptText}
             </pre>
 
-            <button onClick={() => setReceiptText(null)} className="btn btn-primary" style={{ width: '100%' }}>
-              Fechar Cupom
-            </button>
+            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+              <button
+                onClick={() => printReceiptContent(receiptText, 'Cupom da Mesa')}
+                className="btn btn-success"
+                style={{ flex: 1, padding: '10px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <Printer size={16} /> Imprimir na Impressora
+              </button>
+              <button
+                onClick={() => setReceiptText(null)}
+                className="btn btn-outline"
+                style={{ flex: 1, padding: '10px', fontSize: '0.9rem' }}
+              >
+                Fechar Cupom
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -582,6 +607,30 @@ export const CashierScreen: React.FC = () => {
             </div>
           ) : (
             <>
+              {/* BOTÃO DE IMPRESSÃO DA CONTA DA MESA / PRÉ-CONTA ANTES DO PAGAMENTO */}
+              <button
+                onClick={() => handlePrintPreBill(selectedTable.id)}
+                className="btn"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  fontSize: '0.88rem',
+                  fontWeight: 800,
+                  background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+                  color: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(2, 132, 199, 0.25)'
+                }}
+              >
+                <Printer size={18} /> IMPRIMIR CONTA DA MESA (PRÉ-CONTA)
+              </button>
+
               {/* EXIBIÇÃO DE ITENS COM POSSIBILIDADE DE CORREÇÃO/EXCLUSÃO */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
                 
