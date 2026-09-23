@@ -3,6 +3,7 @@ import { CashRegisterSession, Payment, PaymentMethod, DailyReport } from '../mod
 import { TableRepository } from './TableRepository.js';
 import { OrderRepository } from './OrderRepository.js';
 import { InventoryRepository } from './InventoryRepository.js';
+import { AdminRepository } from './AdminRepository.js';
 import { generateReceiptTxt, generatePreBillReceiptTxt } from '../utils/receiptGenerator.js';
 import { generateExpedientReportTxt } from '../utils/expedientReportGenerator.js';
 import { randomUUID } from 'node:crypto';
@@ -13,6 +14,26 @@ function getLocalDateStr(): string {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Percentual da taxa de serviço configurado em Gestão > Configurações.
+ * Antes o valor era fixo em 10% no código; agora respeita o painel administrativo.
+ */
+export function getServiceTaxPercent(): number {
+  try {
+    const pct = Number(AdminRepository.getSettings().service_tax_percent);
+    if (!isFinite(pct) || pct < 0) return 0;
+    return Math.min(100, pct);
+  } catch {
+    return 0;
+  }
+}
+
+function applyServiceTax(subtotal: number, includeTip: boolean): { percent: number; tip: number; total: number } {
+  const percent = getServiceTaxPercent();
+  const tip = includeTip && percent > 0 ? Number(((subtotal * percent) / 100).toFixed(2)) : 0;
+  return { percent, tip, total: Number((subtotal + tip).toFixed(2)) };
 }
 
 export class CashierRepository {
@@ -32,9 +53,7 @@ export class CashierRepository {
 
   static openSession(userId: string, initialBalance: number): CashRegisterSession {
     const active = this.getActiveSession();
-    if (active) {
-      return active;
-    }
+    if (active) return active;
 
     const id = randomUUID();
     db.prepare(`
@@ -57,8 +76,7 @@ export class CashierRepository {
       WHERE id = ?
     `).run(userId, finalBalance, sessionId);
 
-    const closed = db.prepare('SELECT * FROM cashier_sessions WHERE id = ?').get(sessionId) as CashRegisterSession;
-    return closed;
+    return db.prepare('SELECT * FROM cashier_sessions WHERE id = ?').get(sessionId) as CashRegisterSession;
   }
 
   static generateTablePreBill(tableId: string, cashierName: string = 'Operador Caixa'): { filePath: string; receiptContent: string } {
@@ -70,7 +88,7 @@ export class CashierRepository {
     const session = this.getActiveSession();
     const opName = session?.opened_by_name || cashierName;
 
-    return generatePreBillReceiptTxt(tableBill, opName);
+    return generatePreBillReceiptTxt(tableBill, opName, getServiceTaxPercent());
   }
 
   static processPayment(
@@ -78,7 +96,7 @@ export class CashierRepository {
     paymentsInput: { method: PaymentMethod; amount: number; amount_paid?: number }[],
     cashierUserId: string,
     includeTip: boolean = false
-  ): { payments: Payment[]; change_given: number; receipt_file: string; receipt_text: string } {
+  ): { payments: Payment[]; change_given: number; receipt_file: string; receipt_text: string; service_tax_percent: number } {
     let session = this.getActiveSession();
     if (!session) {
       session = this.openSession(cashierUserId || 'u_caixa', 0);
@@ -95,10 +113,12 @@ export class CashierRepository {
     }
 
     const subtotal = tableBill.total_amount;
-    const requiredTotal = includeTip ? Number((subtotal * 1.10).toFixed(2)) : subtotal;
+    const { percent, total: requiredTotal } = applyServiceTax(subtotal, includeTip);
 
     if (totalPaidInInput < requiredTotal - 0.01) {
-      throw new Error(`Valor total pago (R$ ${totalPaidInInput.toFixed(2)}) é inferior ao valor da conta com taxa de 10% (R$ ${requiredTotal.toFixed(2)}).`);
+      throw new Error(
+        `O valor pago (R$ ${totalPaidInInput.toFixed(2)}) é menor que o total da conta (R$ ${requiredTotal.toFixed(2)}).`
+      );
     }
 
     const createdPayments: Payment[] = [];
@@ -110,8 +130,10 @@ export class CashierRepository {
       for (const p of paymentsInput) {
         const paymentAmount = Math.min(p.amount, remainingBill);
         const amountPaid = p.amount_paid !== undefined ? p.amount_paid : p.amount;
-        const change = p.method === 'CASH' && amountPaid > paymentAmount ? Number((amountPaid - paymentAmount).toFixed(2)) : 0;
-        
+        const change = p.method === 'CASH' && amountPaid > paymentAmount
+          ? Number((amountPaid - paymentAmount).toFixed(2))
+          : 0;
+
         totalChangeGiven += change;
         remainingBill -= paymentAmount;
 
@@ -153,13 +175,21 @@ export class CashierRepository {
 
     processTransaction();
 
-    const receiptResult = generateReceiptTxt(tableBill, paymentsInput, totalChangeGiven, session.opened_by_name, includeTip);
+    const receiptResult = generateReceiptTxt(
+      tableBill,
+      paymentsInput,
+      totalChangeGiven,
+      session.opened_by_name,
+      includeTip && percent > 0,
+      percent
+    );
 
     return {
       payments: createdPayments,
       change_given: totalChangeGiven,
       receipt_file: receiptResult.filePath,
-      receipt_text: receiptResult.receiptContent
+      receipt_text: receiptResult.receiptContent,
+      service_tax_percent: percent
     };
   }
 
@@ -183,9 +213,7 @@ export class CashierRepository {
       WHERE oi.order_id = ?
     `).all(orderId) as any[];
 
-    const payments = db.prepare(`
-      SELECT * FROM payments WHERE order_id = ?
-    `).all(orderId) as any[];
+    const payments = db.prepare('SELECT * FROM payments WHERE order_id = ?').all(orderId) as any[];
 
     const tableBill = {
       table: { id: order.table_id, number: order.table_number, name: order.table_name, status: 'FREE' },
@@ -206,9 +234,24 @@ export class CashierRepository {
       amount_paid: p.amount_paid
     }));
 
+    const totalPaid = payments.reduce((acc, p) => acc + (p.amount || 0), 0);
     const totalChange = payments.reduce((acc, p) => acc + (p.change_given || 0), 0);
 
-    const receiptResult = generateReceiptTxt(tableBill as any, paymentsInput as any, totalChange, 'Operador Caixa', false);
+    // Reconstrói se a taxa de serviço havia sido cobrada nesta conta.
+    const tipCharged = totalPaid > Number(order.total_amount) + 0.01;
+    const percent = tipCharged && order.total_amount > 0
+      ? Number((((totalPaid - order.total_amount) / order.total_amount) * 100).toFixed(2))
+      : getServiceTaxPercent();
+
+    const receiptResult = generateReceiptTxt(
+      tableBill as any,
+      paymentsInput as any,
+      totalChange,
+      'Operador Caixa',
+      tipCharged,
+      percent
+    );
+
     return { receipt_text: receiptResult.receiptContent };
   }
 
@@ -225,12 +268,7 @@ export class CashierRepository {
       LIMIT 1
     `).get(targetDate) as CashRegisterSession | undefined;
 
-    const by_payment_method = {
-      CASH: 0,
-      CREDIT_CARD: 0,
-      DEBIT_CARD: 0,
-      PIX: 0
-    };
+    const by_payment_method = { CASH: 0, CREDIT_CARD: 0, DEBIT_CARD: 0, PIX: 0 };
 
     if (!session) {
       return {
@@ -315,35 +353,48 @@ export class CashierRepository {
   static closeDailyExpedient(dateStr?: string, userId: string = 'u_caixa') {
     const targetDate = dateStr || getLocalDateStr();
 
-    // 1. Prato Mais Vendido (Comida)
     const topFood = db.prepare(`
       SELECT mi.name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as total_revenue
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = 'CLOSED' 
-        AND mi.category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+      WHERE o.status = 'CLOSED'
+        AND mi.category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida', 'Água e Refrigerante', 'Sucos Naturais', 'Soda Italiana', 'Caipirinha e Caipivodca', 'Cerveja', 'Vinho')
         AND mi.category NOT LIKE '%Drink%'
         AND mi.category NOT LIKE '%Bebida%'
+        AND mi.category NOT LIKE '%Refrigerante%'
+        AND mi.category NOT LIKE '%Suco%'
+        AND mi.category NOT LIKE '%Cerveja%'
+        AND mi.category NOT LIKE '%Vinho%'
+        AND mi.category NOT LIKE '%Caipir%'
+        AND mi.category NOT LIKE '%Soda%'
       GROUP BY mi.id
       ORDER BY total_qty DESC
       LIMIT 1
     `).get() as { name: string; total_qty: number; total_revenue: number } | undefined;
 
-    // 2. Bebida Mais Vendida (Bebidas e Drinks)
     const topDrink = db.prepare(`
       SELECT mi.name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as total_revenue
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       JOIN orders o ON o.id = oi.order_id
-      WHERE o.status = 'CLOSED' 
-        AND (mi.category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida') OR mi.category LIKE '%Drink%' OR mi.category LIKE '%Bebida%')
+      WHERE o.status = 'CLOSED'
+        AND (
+          mi.category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida', 'Água e Refrigerante', 'Sucos Naturais', 'Soda Italiana', 'Caipirinha e Caipivodca', 'Cerveja', 'Vinho')
+          OR mi.category LIKE '%Drink%'
+          OR mi.category LIKE '%Bebida%'
+          OR mi.category LIKE '%Refrigerante%'
+          OR mi.category LIKE '%Suco%'
+          OR mi.category LIKE '%Cerveja%'
+          OR mi.category LIKE '%Vinho%'
+          OR mi.category LIKE '%Caipir%'
+          OR mi.category LIKE '%Soda%'
+        )
       GROUP BY mi.id
       ORDER BY total_qty DESC
       LIMIT 1
     `).get() as { name: string; total_qty: number; total_revenue: number } | undefined;
 
-    // 3. Mesa de Maior Faturamento
     const topTable = db.prepare(`
       SELECT t.number as table_number, SUM(o.total_amount) as total_revenue
       FROM orders o
@@ -354,7 +405,6 @@ export class CashierRepository {
       LIMIT 1
     `).get() as { table_number: number; total_revenue: number } | undefined;
 
-    // 4. Método de Pagamento Mais Rentável
     const topPayment = db.prepare(`
       SELECT payment_method, SUM(amount) as total_revenue
       FROM payments
@@ -363,7 +413,6 @@ export class CashierRepository {
       LIMIT 1
     `).get() as { payment_method: PaymentMethod; total_revenue: number } | undefined;
 
-    // 5. Insumos Consumidos no Dia (Baixa Real de Estoque)
     const consumedInventory = db.prepare(`
       SELECT inv.id, inv.name, inv.unit, SUM(oi.quantity * mii.quantity_required) as total_consumed
       FROM order_items oi
@@ -374,7 +423,6 @@ export class CashierRepository {
       GROUP BY inv.id
     `).all() as { id: string; name: string; unit: string; total_consumed: number }[];
 
-    // Abater fisicamente do banco de dados no estoque
     const updateInv = db.prepare(`
       UPDATE inventory
       SET quantity = MAX(0, quantity - ?), updated_at = datetime('now', 'localtime')
@@ -385,10 +433,8 @@ export class CashierRepository {
       updateInv.run(item.total_consumed, item.id);
     }
 
-    // Obter relatório completo da sessão do dia
     const report = this.getDailyReport(targetDate);
 
-    // Encerrar sessão ativa de caixa se houver
     const activeSession = this.getActiveSession();
     if (activeSession) {
       this.closeSession(activeSession.id, userId, activeSession.total_sales);
@@ -403,10 +449,10 @@ export class CashierRepository {
         top_table: topTable || { table_number: 0, total_revenue: 0 },
         top_payment: topPayment || { payment_method: 'N/A' as PaymentMethod, total_revenue: 0 }
       },
-      inventory_consumed: consumedInventory
+      inventory_consumed: consumedInventory,
+      service_tax_percent: getServiceTaxPercent()
     };
 
-    // GERAR DOCUMENTO .TXT DO RELATÓRIO DO EXPEDIENTE NA PASTA relatorios_expediente/
     const reportTxtResult = generateExpedientReportTxt(fullExpedientData);
 
     return {
@@ -415,6 +461,7 @@ export class CashierRepository {
       report,
       analytics: fullExpedientData.analytics,
       inventory_consumed: consumedInventory,
+      service_tax_percent: fullExpedientData.service_tax_percent,
       report_file: reportTxtResult.filePath,
       report_text: reportTxtResult.reportContent
     };

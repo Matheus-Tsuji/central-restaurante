@@ -1,7 +1,7 @@
 {
   "name": "central-restaurante",
-  "version": "1.0.0",
-  "description": "Sistema Central Restaurante S.A. Multi-telas (Desktop Electron & Mobile)",
+  "version": "1.4.1",
+  "description": "Sistema de gestao e pedidos offline-first para food service e varejo",
   "main": "main.js",
   "type": "module",
   "scripts": {
@@ -12,9 +12,12 @@
     "electron:dev": "npm run build:vite && npm run build && electron .",
     "build": "tsc",
     "build:vite": "npm --prefix frontend run build",
+    "build:all": "npm run build:vite && npm run build",
     "build:electron": "electron-builder",
     "dist": "npm run build:vite && npm run build && npm run build:electron",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test tests/",
+    "test:watch": "node --test --watch tests/"
   },
   "keywords": [
     "restaurant",
@@ -27,6 +30,9 @@
   ],
   "author": "Matheus Tsuji",
   "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "bonjour-service": "^1.4.4",

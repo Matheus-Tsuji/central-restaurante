@@ -12,9 +12,11 @@ export interface RestaurantSettings {
   payment_methods_allowed: string[];
 }
 
+const VALID_PAYMENT_METHODS = ['CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'PIX'];
+
 export class AdminRepository {
   // ==========================================
-  // 1. GESTÃO DE MESAS (TABLES CRUD)
+  // 1. GESTÃO DE MESAS
   // ==========================================
   static addTable(number: number, name?: string): Table {
     const existing = db.prepare('SELECT * FROM tables WHERE number = ?').get(number);
@@ -62,11 +64,16 @@ export class AdminRepository {
       throw new Error('Não é possível excluir uma mesa que possui pedidos abertos!');
     }
 
+    const hasAnyOrders = db.prepare('SELECT count(*) as count FROM orders WHERE table_id = ?').get(id) as any;
+    if (hasAnyOrders && hasAnyOrders.count > 0) {
+      throw new Error('Esta mesa possui histórico de pedidos registrados no sistema e não pode ser excluída.');
+    }
+
     db.prepare('DELETE FROM tables WHERE id = ?').run(id);
   }
 
   // ==========================================
-  // 2. GESTÃO DO CARDÁPIO (MENU ITEMS CRUD)
+  // 2. GESTÃO DO CARDÁPIO
   // ==========================================
   static addMenuItem(data: { name: string; description: string; price: number; category: string }): MenuItem {
     const id = `m_${randomUUID().substring(0, 6)}`;
@@ -79,6 +86,11 @@ export class AdminRepository {
   }
 
   static updateMenuItem(id: string, data: { name: string; description: string; price: number; category: string; active?: boolean }): MenuItem {
+    const existing = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id);
+    if (!existing) {
+      throw new Error('Item do cardápio não encontrado.');
+    }
+
     db.prepare(`
       UPDATE menu_items
       SET name = ?, description = ?, price = ?, category = ?, active = ?
@@ -89,19 +101,32 @@ export class AdminRepository {
   }
 
   static deleteMenuItem(id: string): void {
-    db.prepare('DELETE FROM menu_items WHERE id = ?').run(id);
+    const item = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(id) as MenuItem | undefined;
+    if (!item) {
+      throw new Error('Item do cardápio não encontrado.');
+    }
+
+    const hasOrderItems = db.prepare('SELECT count(*) as count FROM order_items WHERE menu_item_id = ?').get(id) as { count: number };
+    if (hasOrderItems && hasOrderItems.count > 0) {
+      // Se o item já foi pedido em comandas, desativa para preservar o histórico sem violar a foreign key
+      db.prepare('UPDATE menu_items SET active = 0 WHERE id = ?').run(id);
+    } else {
+      // Se não possui pedidos vinculados, remove as receitas e o item com segurança
+      db.prepare('DELETE FROM menu_item_ingredients WHERE menu_item_id = ?').run(id);
+      db.prepare('DELETE FROM menu_items WHERE id = ?').run(id);
+    }
   }
 
   // ==========================================
-  // 3. GESTÃO DE CATEGORIAS DO CARDÁPIO
+  // 3. CATEGORIAS
   // ==========================================
   static getCategories(): string[] {
-    const rows = db.prepare('SELECT DISTINCT category FROM menu_items ORDER BY category ASC').all() as { category: string }[];
-    return rows.map(r => r.category);
+    const rows = db.prepare("SELECT DISTINCT category FROM menu_items WHERE category IS NOT NULL AND trim(category) != '' ORDER BY category ASC").all() as { category: string }[];
+    return rows.map(r => r.category.trim());
   }
 
   // ==========================================
-  // 4. GESTÃO DE ESTOQUE (INVENTORY CRUD & RESTOCK)
+  // 4. ESTOQUE
   // ==========================================
   static addInventoryItem(data: { name: string; unit: string; quantity: number; min_quantity: number; unit_price: number }): InventoryItem {
     const id = `inv_${randomUUID().substring(0, 6)}`;
@@ -138,7 +163,7 @@ export class AdminRepository {
   }
 
   // ==========================================
-  // 5. CONFIGURAÇÕES DO RESTAURANTE (SETTINGS)
+  // 5. CONFIGURAÇÕES DO RESTAURANTE
   // ==========================================
   static getSettings(): RestaurantSettings {
     const rows = db.prepare('SELECT key, value FROM restaurant_settings').all() as { key: string; value: string }[];
@@ -146,12 +171,12 @@ export class AdminRepository {
     rows.forEach(r => { settingsMap[r.key] = r.value; });
 
     return {
-      restaurant_name: settingsMap['restaurant_name'] || 'Central Restaurante S.A.',
-      cnpj: settingsMap['cnpj'] || '12.345.678/0001-90',
-      phone: settingsMap['phone'] || '(11) 99999-8888',
-      address: settingsMap['address'] || 'Av. Principal, 1000 - Centro - São Paulo/SP',
-      service_tax_percent: Number(settingsMap['service_tax_percent'] || 10),
-      payment_methods_allowed: (settingsMap['payment_methods_allowed'] || 'CASH,CREDIT_CARD,DEBIT_CARD,PIX').split(',')
+      restaurant_name: settingsMap['restaurant_name'] || 'Central Restaurante',
+      cnpj: settingsMap['cnpj'] ?? '',
+      phone: settingsMap['phone'] ?? '',
+      address: settingsMap['address'] ?? '',
+      service_tax_percent: Number(settingsMap['service_tax_percent'] ?? 10),
+      payment_methods_allowed: parsePaymentMethods(settingsMap['payment_methods_allowed'])
     };
   }
 
@@ -167,13 +192,23 @@ export class AdminRepository {
     if (data.phone !== undefined) upsert.run('phone', data.phone);
     if (data.address !== undefined) upsert.run('address', data.address);
     if (data.service_tax_percent !== undefined) upsert.run('service_tax_percent', String(data.service_tax_percent));
-    if (data.payment_methods_allowed !== undefined) upsert.run('payment_methods_allowed', data.payment_methods_allowed.join(','));
+
+    if (data.payment_methods_allowed !== undefined) {
+      // Normaliza: só métodos válidos, sem duplicados, sempre com dinheiro.
+      const cleaned = Array.from(
+        new Set(
+          ['CASH', ...data.payment_methods_allowed.map(m => String(m).trim().toUpperCase())]
+            .filter(m => VALID_PAYMENT_METHODS.includes(m))
+        )
+      );
+      upsert.run('payment_methods_allowed', cleaned.join(','));
+    }
 
     return this.getSettings();
   }
 
   // ==========================================
-  // 6. SEGURANÇA DE CREDENCIAIS ADMIN
+  // 6. CREDENCIAIS DO ADMINISTRADOR
   // ==========================================
   static changeAdminCredentials(currentUserId: string, data: { currentPassword: string; newUsername: string; newPassword: string }): void {
     const adminUser = db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId) as any;
@@ -199,7 +234,30 @@ export class AdminRepository {
     }
 
     const newHash = hashPassword(data.newPassword.trim());
-
     db.prepare('UPDATE users SET username = ?, password_hash = ? WHERE id = ?').run(data.newUsername.trim(), newHash, currentUserId);
   }
+}
+
+/**
+ * Lê a lista de formas de pagamento salva.
+ *
+ * Antes usava `settingsMap[...] || 'CASH,CREDIT_CARD,DEBIT_CARD,PIX'`. Se o
+ * gerente desmarcasse tudo, o valor salvo virava string vazia — que é falsy —
+ * e o sistema reativava TODAS as formas silenciosamente. Agora só voltamos ao
+ * padrão quando a chave realmente não existe.
+ */
+function parsePaymentMethods(raw: string | undefined): string[] {
+  if (raw === undefined || raw === null) {
+    return [...VALID_PAYMENT_METHODS];
+  }
+
+  const parsed = raw
+    .split(',')
+    .map(m => m.trim().toUpperCase())
+    .filter(m => VALID_PAYMENT_METHODS.includes(m));
+
+  // Dinheiro é obrigatório por lei: nunca devolvemos uma lista sem ele.
+  if (!parsed.includes('CASH')) parsed.unshift('CASH');
+
+  return Array.from(new Set(parsed));
 }

@@ -3,8 +3,8 @@ import { MenuItem } from '../models/types.js';
 import { randomUUID } from 'node:crypto';
 
 export class MenuItemService {
-  static listAll(): MenuItem[] {
-    return MenuItemRepository.findAll();
+  static listAll(includeInactive: boolean = false): MenuItem[] {
+    return MenuItemRepository.findAll(includeInactive);
   }
 
   static getById(id: string): MenuItem {

@@ -1,8 +1,6 @@
 import Database, { type Database as SqliteDatabase } from 'better-sqlite3';
 import { env } from './env.js';
 import { hashPassword, verifyPassword } from '../utils/crypto.js';
-import { randomUUID } from 'node:crypto';
-
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -12,7 +10,6 @@ if (!fs.existsSync(dbDir)) {
 }
 
 export const db: SqliteDatabase = new Database(env.DB_PATH);
-
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -140,7 +137,6 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_payments_session ON payments(cashier_session_id);
   `);
 
-  // Migração segura para garantir existência de cashier_session_id em bases já criadas
   try {
     const tableInfo = db.prepare("PRAGMA table_info(orders)").all() as { name: string }[];
     const hasCashierSessionId = tableInfo.some(col => col.name === 'cashier_session_id');
@@ -153,23 +149,23 @@ export function initDatabase(): void {
   }
 
   seedDefaultData();
+  normalizeInventoryNames();
 }
 
 function seedDefaultData(): void {
-  // Seed Usuários padrões se não existirem
+  // ---------------------------------------------------------------- Usuários
   const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
+
   if (userCount === 0) {
     const insertUser = db.prepare(
       'INSERT INTO users (id, name, username, role, password_hash) VALUES (?, ?, ?, ?, ?)'
     );
-
     insertUser.run('u_admin', 'Administrador Central', 'admin', 'ADMIN', hashPassword('123456'));
     insertUser.run('u_caixa', 'Caixa Principal', 'caixa', 'CASHIER', hashPassword('caixa123'));
     insertUser.run('u_garcom', 'Garçom João', 'garcom', 'WAITER', hashPassword('garcom123'));
     insertUser.run('u_cozinha', 'Cozinha Chefe', 'cozinha', 'KITCHEN', hashPassword('cozinha123'));
     console.log('✅ Usuários iniciais cadastrados (admin, caixa, garcom, cozinha).');
   } else {
-    // Garante migração da senha inicial do admin caso o banco já existisse
     const existingAdmin = db.prepare("SELECT * FROM users WHERE username = 'admin' OR role = 'ADMIN'").get() as any;
     if (existingAdmin && verifyPassword('admin123', existingAdmin.password_hash)) {
       const newHash = hashPassword('123456');
@@ -178,7 +174,7 @@ function seedDefaultData(): void {
     }
   }
 
-  // Seed Mesas (1 a 10) se não existirem
+  // ------------------------------------------------------------------ Mesas
   const tableCount = (db.prepare('SELECT COUNT(*) as count FROM tables').get() as { count: number }).count;
   if (tableCount === 0) {
     const insertTable = db.prepare('INSERT INTO tables (id, number, name) VALUES (?, ?, ?)');
@@ -188,12 +184,19 @@ function seedDefaultData(): void {
     console.log('✅ 10 mesas iniciais criadas.');
   }
 
-  // SEMPRE GARANTIR O POPULAMENTO DO ESTOQUE E CARDÁPIO COMPLETO
+  // ---------------------------------------------------------------- Estoque
+  //
+  // CORREÇÃO IMPORTANTE: antes este bloco usava INSERT OR REPLACE e rodava a
+  // cada inicialização do servidor. Isso reescrevia a quantidade de TODOS os
+  // insumos de volta ao valor de fábrica, apagando todo o consumo e toda a
+  // reposição feita pelo gerente sempre que o sistema era reiniciado.
+  //
+  // Agora usamos INSERT OR IGNORE: o insumo é criado apenas na primeira vez e
+  // a quantidade em estoque nunca mais é sobrescrita pelo seed.
   const insertInv = db.prepare(
-    'INSERT OR REPLACE INTO inventory (id, name, unit, quantity, min_quantity, unit_price) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT OR IGNORE INTO inventory (id, name, unit, quantity, min_quantity, unit_price) VALUES (?, ?, ?, ?, ?, ?)'
   );
 
-  // Insumos Básicos
   const paoBrioche = 'inv-pao';
   const carne180g = 'inv-carne';
   const carneSmash90g = 'inv-carne-smash';
@@ -204,8 +207,6 @@ function seedDefaultData(): void {
   const refriGuarana = 'inv-refri-guarana';
   const sucoLaranja = 'inv-laranja';
   const sorveteCreme = 'inv-sorvete';
-
-  // Novos Insumos Expandidos
   const picanhaBovina = 'inv-picanha';
   const filetMignon = 'inv-mignon';
   const peitoFrango = 'inv-frango';
@@ -217,135 +218,155 @@ function seedDefaultData(): void {
   const aperolGarrafa = 'inv-aperol';
   const brownieBolo = 'inv-brownie';
 
+  // Nomes sem sufixo de unidade: a unidade já aparece na coluna própria.
   insertInv.run(paoBrioche, 'Pão de Hambúrguer Brioche', 'un', 150, 30, 1.80);
   insertInv.run(carne180g, 'Hambúrguer Artesanal 180g', 'un', 80, 15, 8.50);
-  insertInv.run(carneSmash90g, 'Hambúrguer Smash 90g (Grama)', 'g', 15000, 2000, 0.04);
+  insertInv.run(carneSmash90g, 'Carne Smash', 'g', 15000, 2000, 0.04);
   insertInv.run(queijoCheddar, 'Queijo Cheddar Fatiado', 'un', 300, 40, 0.90);
-  insertInv.run(baconFatiado, 'Bacon Defumado Fatiado (Grama)', 'g', 5000, 1000, 0.06);
-  insertInv.run(batataInNatura, 'Batata Porção (Grama)', 'g', 20000, 3000, 0.02);
-
+  insertInv.run(baconFatiado, 'Bacon Defumado Fatiado', 'g', 5000, 1000, 0.06);
+  insertInv.run(batataInNatura, 'Batata para Porção', 'g', 20000, 3000, 0.02);
   insertInv.run(refriCola, 'Lata Refrigerante Cola 350ml', 'un', 150, 30, 3.50);
   insertInv.run(refriGuarana, 'Lata Refrigerante Guaraná 350ml', 'un', 120, 24, 3.50);
-  insertInv.run(sucoLaranja, 'Laranja in Natura (Unidade)', 'un', 200, 40, 1.00);
-  insertInv.run(sorveteCreme, 'Sorvete de Creme (Grama)', 'g', 10000, 1500, 0.04);
+  insertInv.run(sucoLaranja, 'Laranja in Natura', 'un', 200, 40, 1.00);
+  insertInv.run(sorveteCreme, 'Sorvete de Creme', 'g', 10000, 1500, 0.04);
+  insertInv.run(picanhaBovina, 'Picanha Bovina', 'g', 15000, 2500, 0.12);
+  insertInv.run(filetMignon, 'Filé Mignon Bovino', 'g', 12000, 2000, 0.10);
+  insertInv.run(peitoFrango, 'Peito de Frango', 'g', 18000, 3000, 0.03);
+  insertInv.run(peixeFile, 'Filé de Peixe', 'g', 10000, 1500, 0.07);
+  insertInv.run(costelaBovina, 'Costela Bovina Desfiada', 'g', 8000, 1000, 0.08);
+  insertInv.run(limaoTahiti, 'Limão Tahiti', 'un', 250, 50, 0.60);
+  insertInv.run(ginGarrafa, 'Gin', 'dose', 100, 20, 3.50);
+  insertInv.run(cachacaGarrafa, 'Cachaça Artesanal', 'dose', 100, 20, 2.50);
+  insertInv.run(aperolGarrafa, 'Aperol', 'dose', 80, 15, 4.00);
+  insertInv.run(brownieBolo, 'Brownie de Chocolate', 'un', 50, 10, 5.00);
 
-  insertInv.run(picanhaBovina, 'Picanha Bovina (Grama)', 'g', 15000, 2500, 0.12);
-  insertInv.run(filetMignon, 'Filé Mignon Bovino (Grama)', 'g', 12000, 2000, 0.10);
-  insertInv.run(peitoFrango, 'Peito de Frango (Grama)', 'g', 18000, 3000, 0.03);
-  insertInv.run(peixeFile, 'Filé de Peixe (Grama)', 'g', 10000, 1500, 0.07);
-  insertInv.run(costelaBovina, 'Costela Bovina Desfiada (Grama)', 'g', 8000, 1000, 0.08);
+  // --------------------------------------------------------------- Cardápio
+  // O cardápio inicial é cadastrado apenas se não houver itens ativos.
+  // Usamos INSERT OR IGNORE para NUNCA mais sobrescrever alterações feitas
+  // pelo usuário no painel de administração sempre que o sistema reiniciar.
+  const activeMenuCount = (db.prepare('SELECT COUNT(*) as count FROM menu_items WHERE active = 1').get() as { count: number }).count;
 
-  insertInv.run(limaoTahiti, 'Limão Tahiti (Unidade)', 'un', 250, 50, 0.60);
-  insertInv.run(ginGarrafa, 'Gin Garrafa (Dose 50ml)', 'dose', 100, 20, 3.50);
-  insertInv.run(cachacaGarrafa, 'Cachaça Artesanal (Dose 50ml)', 'dose', 100, 20, 2.50);
-  insertInv.run(aperolGarrafa, 'Aperol (Dose 50ml)', 'dose', 80, 15, 4.00);
-  insertInv.run(brownieBolo, 'Brownie Chocolate (Unidade)', 'un', 50, 10, 5.00);
+  const DEFAULT_MENU_ITEMS = [
+    // ENTRADAS
+    { id: 'm_ent_1', name: 'Casquinha de Siri', price: 30.00, category: 'Entradas', description: 'Unidade' },
+    { id: 'm_ent_2', name: 'Salada da Casa', price: 28.00, category: 'Entradas', description: 'Individual. Alface, Tomate Cereja, Palmito, Cenoura' },
+    { id: 'm_ent_3', name: 'Pão de Alho', price: 20.00, category: 'Entradas', description: 'Unidade' },
+    { id: 'm_ent_4', name: 'Polvo ao Vinagrete', price: 55.00, category: 'Entradas', description: '' },
 
-  // Seed Cardápio Rico & Expandido (30+ Itens em 6 Categorias)
-  const insertMenu = db.prepare(
-    'INSERT OR REPLACE INTO menu_items (id, name, description, price, category, active) VALUES (?, ?, ?, ?, ?, 1)'
-  );
+    // PETISCOS
+    { id: 'm_pet_1', name: 'Isca de Peixe', price: 89.00, category: 'Petiscos', description: '' },
+    { id: 'm_pet_2', name: 'Lula à Dorê', price: 95.00, category: 'Petiscos', description: '' },
+    { id: 'm_pet_3', name: 'Camarão ao Alho e Óleo', price: 145.00, category: 'Petiscos', description: '' },
+    { id: 'm_pet_4', name: 'Batata Frita', price: 39.00, category: 'Petiscos', description: '' },
+    { id: 'm_pet_5', name: 'Aipim Frito', price: 42.00, category: 'Petiscos', description: '' },
 
-  // Lanches
-  insertMenu.run('m1', 'X-Burguer Especial', 'Pão brioche, artesanal 180g, duplo cheddar', 32.90, 'Lanches');
-  insertMenu.run('m2', 'Smash Bacon Supreme', 'Dois smash 90g (180g total), cheddar, bacon crocante', 36.50, 'Lanches');
-  insertMenu.run('m7', 'Monster Cheddar Bacon', 'Três smash 90g (270g carne), triplo cheddar, bacon', 42.00, 'Lanches');
-  insertMenu.run('m8', 'Chicken Crispy Mayo', 'Sobrecoxa empanada super crocante e maionese da casa', 29.90, 'Lanches');
-  insertMenu.run('m9', 'X-Salada Artesanal', 'Pão brioche, artesanal 180g, queijo prato, alface e tomate', 31.00, 'Lanches');
-  insertMenu.run('m25', 'Veggie Burger Cogumelos', 'Hambúrguer de cogumelos, queijo de cabra e rúcula', 34.00, 'Lanches');
+    // PASTÉIS
+    { id: 'm_pas_1', name: 'Pastel de Camarão com Catupiry', price: 75.00, category: 'Pastéis', description: 'Porção com 6 unidades' },
+    { id: 'm_pas_2', name: 'Pastel de Camarão', price: 70.00, category: 'Pastéis', description: 'Porção com 6 unidades' },
+    { id: 'm_pas_3', name: 'Pastel de Siri', price: 70.00, category: 'Pastéis', description: 'Porção com 6 unidades' },
+    { id: 'm_pas_4', name: 'Pastel de Carne', price: 55.00, category: 'Pastéis', description: 'Porção com 6 unidades' },
+    { id: 'm_pas_5', name: 'Pastel de Queijo', price: 50.00, category: 'Pastéis', description: 'Porção com 6 unidades. Opção vegetariana' },
 
-  // Pratos Principais
-  insertMenu.run('m10', 'Picanha na Grelha 500g', 'Acompanha arroz, farofa artesanal e vinagrete', 89.90, 'Pratos Principais');
-  insertMenu.run('m11', 'Parmegiana de Mignon', 'Filé mignon empanado, molho de tomate e mussarela', 58.00, 'Pratos Principais');
-  insertMenu.run('m12', 'Filé de Frango Grelhado', 'Servido com legumes na manteiga e purê de batata', 34.90, 'Pratos Principais');
-  insertMenu.run('m26', 'Strogonoff de Filé Mignon', 'Com molho cremoso de cogumelos, batata palha e arroz', 46.00, 'Pratos Principais');
-  insertMenu.run('m27', 'Feijoada Completa Individual', 'Acompanha couve refogada, torresmo, farofa e laranja', 49.90, 'Pratos Principais');
-  insertMenu.run('m28', 'Bife de Ancho c/ Alho Assado', 'Corte nobre 350g com batatas rústicas e chimichurri', 69.00, 'Pratos Principais');
+    // VEGETARIANO
+    { id: 'm_veg_1', name: 'Queijo Coalho à Brasileira', price: 55.00, category: 'Vegetariano', description: 'Arroz, Batata Frita, Farofa, Vinagrete. Opção vegetariana' },
 
-  // Porções
-  insertMenu.run('m3', 'Batata Rústica c/ Páprica', 'Porção 400g servida com maionese da casa', 22.00, 'Porções');
-  insertMenu.run('m13', 'Anéis de Cebola Empanados 300g', 'Anéis de cebola crocantes com molho barbecue', 26.00, 'Porções');
-  insertMenu.run('m14', 'Isca de Peixe c/ Molho Tártaro', 'Porção 400g de peixe empanado bem crocante', 48.00, 'Porções');
-  insertMenu.run('m15', 'Coxinha de Costela (6un)', 'Coxinhas recheadas com costela desfiada e catupiry', 32.00, 'Porções');
-  insertMenu.run('m29', 'Mandioca Frita c/ Bacon', 'Porção 400g de mandioca dourada e bacon em cubos', 25.00, 'Porções');
-  insertMenu.run('m30', 'Calabresa Acebolada na Chapa', 'Servida com farofa e fatias de pão francês', 38.00, 'Porções');
-  insertMenu.run('m31', 'Frango a Passarinho c/ Alho', 'Porção 500g de frango crocante com alho frito', 42.00, 'Porções');
+    // CARNES
+    { id: 'm_car_1', name: 'Picanha na Chapa', price: 189.00, category: 'Carnes', description: 'Serve 2 Pessoas. Acompanha Arroz, Batata Frita, Farofa, Vinagrete' },
+    { id: 'm_car_2', name: 'Contra Filé com Fritas', price: 69.00, category: 'Carnes', description: 'Individual. Acompanha Arroz, Batata Frita, Farofa, Vinagrete' },
+    { id: 'm_car_3', name: 'Filé de Frango com Fritas', price: 59.00, category: 'Carnes', description: 'Individual. Acompanha Arroz, Batata Frita, Farofa, Vinagrete' },
 
-  // Bebidas
-  insertMenu.run('m4', 'Refrigerante Cola 350ml', 'Lata 350ml trincando de gelada', 7.50, 'Bebidas');
-  insertMenu.run('m5', 'Suco Natural Laranja 500ml', 'Suco fresco espremido na hora', 11.00, 'Bebidas');
-  insertMenu.run('m16', 'Refrigerante Guaraná 350ml', 'Lata 350ml trincando de gelada', 7.50, 'Bebidas');
-  insertMenu.run('m17', 'Água Mineral c/ Gás 500ml', 'Garrafa 500ml bem gelada', 5.00, 'Bebidas');
-  insertMenu.run('m18', 'Água Mineral Sem Gás 500ml', 'Garrafa 500ml bem gelada', 4.50, 'Bebidas');
-  insertMenu.run('m32', 'Chá Gelado Laranja & Salvia', 'Copo 500ml refrescante', 9.50, 'Bebidas');
-  insertMenu.run('m33', 'Cerveja Long Neck Heineken 330ml', 'Garrafa 330ml estúpida de gelada', 12.00, 'Bebidas');
+    // FRUTOS DO MAR
+    { id: 'm_fdm_1', name: 'Polvo na Brasa', price: 159.00, category: 'Frutos do Mar', description: 'Serve 2 Pessoas. Batata Frita, Arroz, Farofa, Vinagrete' },
+    { id: 'm_fdm_2', name: 'Camarão no Abacaxi', price: 159.00, category: 'Frutos do Mar', description: 'Serve 2 Pessoas. Arroz, Batata Frita, Salada' },
+    { id: 'm_fdm_3', name: 'Camarão ao Catupiry', price: 89.00, category: 'Frutos do Mar', description: 'Individual. Arroz, Batata Palha' },
+    { id: 'm_fdm_4', name: 'Camarão Tropical', price: 85.00, category: 'Frutos do Mar', description: 'Individual. Camarões com Bacon, Purê de Banana da Terra, Arroz e Farofa' },
+    { id: 'm_fdm_5', name: 'Filé de Peixe ao Molho de Camarão', price: 89.00, category: 'Frutos do Mar', description: 'Individual. Arroz, Batata Frita, Salada' },
+    { id: 'm_fdm_6', name: 'Filé de Peixe ao Molho de Maracujá', price: 85.00, category: 'Frutos do Mar', description: 'Individual. Arroz, Batata Frita, Salada' },
+    { id: 'm_fdm_7', name: 'Lula Recheada do Chef', price: 75.00, category: 'Frutos do Mar', description: 'Individual. Lula Recheada com Vinagrete e Parmesão, Arroz, Batata Frita, Farofa' },
 
-  // Drinks do Bar
-  insertMenu.run('m19', 'Caipirinha de Limão Tradicional', 'Cachaça artesanal, limão fresquinho e açúcar', 22.00, 'Drinks do Bar');
-  insertMenu.run('m20', 'Gin Tônica Tropical', 'Gin importado, tônica e xarope de maracujá', 28.00, 'Drinks do Bar');
-  insertMenu.run('m21', 'Aperol Spritz', 'Aperol, espumante e fatia de laranja', 30.00, 'Drinks do Bar');
-  insertMenu.run('m22', 'Mojito Cubano Tradicional', 'Rum branco, hortelã fresca, limão e água com gás', 25.00, 'Drinks do Bar');
-  insertMenu.run('m34', 'Piña Colada Classic', 'Rum, leite de coco, suco de abacaxi e leite condensado', 27.00, 'Drinks do Bar');
-  insertMenu.run('m35', 'Moscow Mule c/ Espuma', 'Vodka, suco de limão e espuma artesanal de gengibre', 32.00, 'Drinks do Bar');
+    // MASSAS
+    { id: 'm_mas_1', name: 'Talharim com Camarão', price: 79.00, category: 'Massas', description: 'Ao Molho Branco de Limão Siciliano' },
+    { id: 'm_mas_2', name: 'Talharim com Lula', price: 69.00, category: 'Massas', description: 'Ao Molho Branco' },
+    { id: 'm_mas_3', name: 'Nhoque ao Molho de Camarão', price: 79.00, category: 'Massas', description: '' },
+    { id: 'm_mas_4', name: 'Nhoque ao Sugo e Manjericão', price: 55.00, category: 'Massas', description: 'Opção vegetariana' },
 
-  // Sobremesas
-  insertMenu.run('m6', 'Petit Gâteau Chocolate', 'Acompanha sorvete de creme e calda quente', 24.90, 'Sobremesas');
-  insertMenu.run('m23', 'Brownie c/ Sorvete de Creme', 'Brownie aquecido com bola de sorvete de creme', 22.00, 'Sobremesas');
-  insertMenu.run('m24', 'Pudim de Leite Condensado', 'Fatia generosa com calda cremosa de caramelo', 14.00, 'Sobremesas');
-  insertMenu.run('m36', 'Torta Holandesa Fatia', 'Creme holandês leve com cobertura de ganache', 18.00, 'Sobremesas');
-  insertMenu.run('m37', 'Churros c/ Doce de Leite (4un)', 'Churros crocantes recheados com doce de leite', 20.00, 'Sobremesas');
+    // ÁGUA E REFRIGERANTE
+    { id: 'm_ref_1', name: 'Água (500 ml)', price: 6.00, category: 'Água e Refrigerante', description: '' },
+    { id: 'm_ref_2', name: 'Água com gás (500 ml)', price: 8.00, category: 'Água e Refrigerante', description: '' },
+    { id: 'm_ref_3', name: 'Coca-Cola (Comum ou Zero) (Lata)', price: 12.00, category: 'Água e Refrigerante', description: 'Lata' },
+    { id: 'm_ref_4', name: 'Guaraná (Comum ou Zero) (Lata)', price: 12.00, category: 'Água e Refrigerante', description: 'Lata' },
+    { id: 'm_ref_5', name: 'Sprite (Comum ou Zero) (Lata)', price: 12.00, category: 'Água e Refrigerante', description: 'Lata' },
+    { id: 'm_ref_6', name: 'Água Tônica (Lata)', price: 12.00, category: 'Água e Refrigerante', description: 'Lata' },
+    { id: 'm_ref_7', name: 'Shot de Limão Espremido (30 ml)', price: 2.00, category: 'Água e Refrigerante', description: '30 ml' },
 
-  // Ficha técnica (Mapeamento de Insumos para Abatimento Real no Estoque)
-  const insertIng = db.prepare(
-    'INSERT OR REPLACE INTO menu_item_ingredients (id, menu_item_id, inventory_id, quantity_required) VALUES (?, ?, ?, ?)'
-  );
+    // SUCOS NATURAIS
+    { id: 'm_suc_1', name: 'Suco Natural (350 ml)', price: 18.00, category: 'Sucos Naturais', description: '350 ml. Sabores: Abacaxi, Limão, Manga, Maracujá, Morango' },
 
-  // m1: X-Burguer Especial
-  insertIng.run('ing-m1-1', 'm1', paoBrioche, 1);
-  insertIng.run('ing-m1-2', 'm1', carne180g, 1);
-  insertIng.run('ing-m1-3', 'm1', queijoCheddar, 2);
+    // SODA ITALIANA
+    { id: 'm_sod_1', name: 'Soda Italiana (350 ml)', price: 18.00, category: 'Soda Italiana', description: '350 ml. Drink não alcoólico, refrescante, produzido com xarope de frutas, água com gás e gelo. Sabores: Maçã Verde, Tangerina, Framboesa' },
 
-  // m2: Smash Bacon Supreme
-  insertIng.run('ing-m2-1', 'm2', paoBrioche, 1);
-  insertIng.run('ing-m2-2', 'm2', carneSmash90g, 180);
-  insertIng.run('ing-m2-3', 'm2', queijoCheddar, 2);
-  insertIng.run('ing-m2-4', 'm2', baconFatiado, 50);
+    // CAIPIRINHA E CAIPIVODCA
+    { id: 'm_cai_1', name: 'Caipirinha', price: 25.00, category: 'Caipirinha e Caipivodca', description: 'Sabores: Abacaxi, Limão, Manga, Maracujá, Morango' },
+    { id: 'm_cai_2', name: 'Caipivodca', price: 30.00, category: 'Caipirinha e Caipivodca', description: 'Sabores: Abacaxi, Limão, Manga, Maracujá, Morango' },
 
-  // m7: Monster Cheddar Bacon
-  insertIng.run('ing-m7-1', 'm7', paoBrioche, 1);
-  insertIng.run('ing-m7-2', 'm7', carneSmash90g, 270);
-  insertIng.run('ing-m7-3', 'm7', queijoCheddar, 3);
-  insertIng.run('ing-m7-4', 'm7', baconFatiado, 80);
+    // CERVEJA
+    { id: 'm_cer_1', name: 'Brahma (Latão 473 ml)', price: 15.00, category: 'Cerveja', description: 'Latão 473 ml' },
+    { id: 'm_cer_2', name: 'Original (Latão 473 ml)', price: 18.00, category: 'Cerveja', description: 'Latão 473 ml' },
+    { id: 'm_cer_3', name: 'Heineken (Latão 473 ml)', price: 18.00, category: 'Cerveja', description: 'Latão 473 ml' },
+    { id: 'm_cer_4', name: 'Corona (Long Neck)', price: 20.00, category: 'Cerveja', description: 'Long Neck' },
+    { id: 'm_cer_5', name: 'Praya (Long Neck)', price: 20.00, category: 'Cerveja', description: 'Long Neck' },
 
-  // m10: Picanha na Grelha
-  insertIng.run('ing-m10-1', 'm10', picanhaBovina, 500);
+    // VINHO
+    { id: 'm_vin_1', name: 'Vinho Meia Garrafa (375 ml)', price: 0.00, category: 'Vinho', description: 'Sob consulta. Consulte a disponibilidade' },
+    { id: 'm_vin_2', name: 'Vinho Garrafa (750 ml)', price: 0.00, category: 'Vinho', description: 'Sob consulta. Consulte a disponibilidade' },
 
-  // m11: Parmegiana de Mignon
-  insertIng.run('ing-m11-1', 'm11', filetMignon, 300);
+    // AÇAÍ
+    { id: 'm_aca_1', name: 'Açaí Simples', price: 25.00, category: 'Açaí', description: 'Bowl de 400 ml. Açaí Batido' },
+    { id: 'm_aca_2', name: 'Açaí Completo', price: 35.00, category: 'Açaí', description: 'Bowl de 400 ml. Açaí Batido + Banana + Granola + Paçoca + Leite Ninho' },
 
-  // m12: Filé de Frango
-  insertIng.run('ing-m12-1', 'm12', peitoFrango, 250);
+    // SOBREMESAS
+    { id: 'm_sob_1', name: 'Sorvete', price: 22.00, category: 'Sobremesas', description: '2 Bolas. Sabores: Chocolate e Creme' },
+    { id: 'm_sob_2', name: 'Brownie com Sorvete', price: 35.00, category: 'Sobremesas', description: 'Sorvete de Chocolate ou Creme' },
+    { id: 'm_sob_3', name: 'Banana Caramelizada com Sorvete', price: 35.00, category: 'Sobremesas', description: 'Sorvete de Chocolate ou Creme' },
+    { id: 'm_sob_4', name: 'Petit Gateau com Sorvete', price: 38.00, category: 'Sobremesas', description: 'Sorvete de Chocolate ou Creme' }
+  ];
 
-  // m3: Batata Rústica
-  insertIng.run('ing-m3-1', 'm3', batataInNatura, 400);
+  if (activeMenuCount === 0) {
+    const insertMenu = db.prepare(
+      'INSERT OR IGNORE INTO menu_items (id, name, description, price, category, active) VALUES (?, ?, ?, ?, ?, 1)'
+    );
 
-  // m14: Isca de Peixe
-  insertIng.run('ing-m14-1', 'm14', peixeFile, 400);
+    for (const item of DEFAULT_MENU_ITEMS) {
+      insertMenu.run(item.id, item.name, item.description, item.price, item.category);
+    }
+    console.log(`✅ Cardápio inicial cadastrado com ${DEFAULT_MENU_ITEMS.length} itens em 14 categorias.`);
+  }
+}
 
-  // m15: Coxinha de Costela
-  insertIng.run('ing-m15-1', 'm15', costelaBovina, 200);
+/**
+ * Remove sufixos de unidade dos nomes de insumos já gravados em bancos
+ * antigos ("Bacon Defumado Fatiado (Grama)" -> "Bacon Defumado Fatiado").
+ * A unidade já é exibida em coluna própria, então o sufixo só poluía a tela.
+ */
+function normalizeInventoryNames(): void {
+  try {
+    const items = db.prepare('SELECT id, name FROM inventory').all() as { id: string; name: string }[];
+    const update = db.prepare('UPDATE inventory SET name = ? WHERE id = ?');
+    const pattern = /\s*\((grama|gramas|g|unidade|unidades|un|dose\s*50ml|dose|ml|litro|litros|l|pacote|pct)\)\s*$/i;
 
-  // Drinks
-  insertIng.run('ing-m19-1', 'm19', cachacaGarrafa, 1);
-  insertIng.run('ing-m19-2', 'm19', limaoTahiti, 1);
+    let changed = 0;
+    for (const item of items) {
+      const cleaned = item.name.replace(pattern, '').trim();
+      if (cleaned && cleaned !== item.name) {
+        update.run(cleaned, item.id);
+        changed++;
+      }
+    }
 
-  insertIng.run('ing-m20-1', 'm20', ginGarrafa, 1);
-  insertIng.run('ing-m21-1', 'm21', aperolGarrafa, 1);
-
-  // Sobremesas
-  insertIng.run('ing-m6-1', 'm6', sorveteCreme, 100);
-  insertIng.run('ing-m23-1', 'm23', brownieBolo, 1);
-  insertIng.run('ing-m23-2', 'm23', sorveteCreme, 100);
-
-  console.log('✅ Cardápio e Estoque Expandidos sincronizados (30+ pratos e bebidas em 6 categorias).');
+    if (changed > 0) {
+      console.log(`✅ ${changed} nome(s) de insumo padronizados.`);
+    }
+  } catch (err) {
+    console.warn('Aviso ao padronizar nomes de insumos:', err);
+  }
 }

@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Table, MenuItem } from '../types';
 import { api } from '../services/api';
+import { socket } from '../services/socket';
 import { offlineDb } from '../services/offlineDb';
-import { ShoppingBag, Plus, Minus, Send, CheckCircle2, AlertCircle, Search, RefreshCw, X, ChevronUp } from 'lucide-react';
+import { useServiceTaxPercent, calcServiceTax, formatPercent } from '../services/settings';
+import { useIsMobile } from '../hooks/useIsMobile';
+import {
+  ShoppingBag, Plus, Minus, Send, CheckCircle2, AlertCircle, Search, RefreshCw,
+  X, UserPlus, DoorOpen, LayoutGrid, Utensils, ArrowLeft, Trash2
+} from 'lucide-react';
 
 interface WaiterScreenProps {
   isOnline: boolean;
@@ -15,479 +21,597 @@ interface CartItem {
   notes: string;
 }
 
-const INITIAL_TABLES: Table[] = [
-  { id: 't1', number: 1, name: 'Mesa 1', status: 'OCCUPIED' },
-  { id: 't2', number: 2, name: 'Mesa 2', status: 'FREE' },
-  { id: 't3', number: 3, name: 'Mesa 3', status: 'PAYMENT_PENDING' },
-  { id: 't4', number: 4, name: 'Mesa 4', status: 'FREE' },
-  { id: 't5', number: 5, name: 'Mesa 5', status: 'OCCUPIED' },
-  { id: 't6', number: 6, name: 'Mesa 6', status: 'FREE' },
-  { id: 't7', number: 7, name: 'Mesa 7', status: 'FREE' },
-  { id: 't8', number: 8, name: 'Mesa 8', status: 'FREE' },
-  { id: 't9', number: 9, name: 'Mesa 9', status: 'FREE' },
-  { id: 't10', number: 10, name: 'Mesa 10', status: 'FREE' }
+type MobileStep = 'TABLES' | 'MENU' | 'CART';
+
+const INITIAL_TABLES: Table[] = Array.from({ length: 10 }, (_, i) => ({
+  id: `t${i + 1}`,
+  number: i + 1,
+  name: `Mesa ${i + 1}`,
+  status: 'FREE'
+}));
+
+const CATEGORY_ORDER = [
+  'Entradas',
+  'Petiscos',
+  'Porções',
+  'Pastéis',
+  'Carnes',
+  'Frutos do Mar',
+  'Massas',
+  'Vegetariano',
+  'Pratos Principais',
+  'Lanches',
+  'Água e Refrigerante',
+  'Bebidas',
+  'Bebida',
+  'Sucos Naturais',
+  'Soda Italiana',
+  'Cerveja',
+  'Caipirinha e Caipivodca',
+  'Drinks do Bar',
+  'Drinks',
+  'Bar',
+  'Vinho',
+  'Sobremesas',
+  'Sobremesa',
+  'Açaí'
 ];
 
-const INITIAL_MENU: MenuItem[] = [
-  { id: 'm1', name: 'X-Burguer Especial', description: 'Pão brioche, artesanal 180g, duplo cheddar', price: 32.90, category: 'Lanches', active: true },
-  { id: 'm2', name: 'Smash Bacon Supreme', description: 'Dois smash 90g, queijo prato, bacon crocante', price: 36.50, category: 'Lanches', active: true },
-  { id: 'm3', name: 'Batata Rústica c/ Páprica', description: 'Porção 400g servida com maionese da casa', price: 22.00, category: 'Porções', active: true },
-  { id: 'm4', name: 'Refrigerante Cola 350ml', description: 'Lata trincando de gelada', price: 7.50, category: 'Bebidas', active: true },
-  { id: 'm5', name: 'Suco Natural Laranja 500ml', description: 'Suco da fruta feito na hora', price: 11.00, category: 'Bebidas', active: true },
-  { id: 'm6', name: 'Petit Gâteau Chocolate', description: 'Acompanha sorvete de creme e calda', price: 24.90, category: 'Sobremesas', active: true }
-];
+function getCategoryIndex(cat: string): number {
+  const idx = CATEGORY_ORDER.indexOf(cat);
+  return idx === -1 ? 999 : idx;
+}
+
+function sortCategories(cats: string[]): string[] {
+  return [...cats].sort((a, b) => {
+    const diff = getCategoryIndex(a) - getCategoryIndex(b);
+    if (diff !== 0) return diff;
+    return a.localeCompare(b, 'pt-BR');
+  });
+}
 
 export const WaiterScreen: React.FC<WaiterScreenProps> = ({ isOnline, onOrderCreated }) => {
+  const taxPercent = useServiceTaxPercent();
+  const isMobile = useIsMobile();
+
   const [tables, setTables] = useState<Table[]>(INITIAL_TABLES);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(INITIAL_MENU);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [orderNotes, setOrderNotes] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [changingTable, setChangingTable] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Estado de controle do Drawer do Carrinho em Celulares
-  const [showMobileCart, setShowMobileCart] = useState<boolean>(false);
+  const [step, setStep] = useState<MobileStep>('TABLES');
+  const [menuState, setMenuState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [menuError, setMenuError] = useState<string>('');
 
   useEffect(() => {
-    loadDataBackground();
+    carregarDados();
+    if (socket) {
+      socket.on('table:status_changed', carregarMesas);
+      socket.on('tables:updated', carregarMesas);
+      socket.on('menu:updated', carregarCardapio);
+    }
+    return () => {
+      if (socket) {
+        socket.off('table:status_changed', carregarMesas);
+        socket.off('tables:updated', carregarMesas);
+        socket.off('menu:updated', carregarCardapio);
+      }
+    };
   }, []);
 
-  async function loadDataBackground() {
-    setRefreshing(true);
+  async function carregarDados() {
+    await Promise.all([carregarMesas(), carregarCardapio()]);
+  }
+
+  async function carregarMesas() {
     try {
-      const [tData, mData] = await Promise.all([api.getTables(), api.getMenuItems()]);
-      if (tData && tData.length > 0) setTables(tData);
-      if (mData && mData.length > 0) setMenuItems(mData);
+      const tData = await api.getTables();
+      if (tData && tData.length > 0) {
+        setTables(tData);
+        setSelectedTable(prev => (prev ? tData.find(t => t.id === prev.id) || prev : prev));
+      }
     } catch (err) {
-      console.warn('Erro ao atualizar dados em segundo plano:', err);
-    } finally {
-      setRefreshing(false);
+      console.warn('Erro ao carregar mesas:', err);
     }
   }
 
-  const categories = ['Todos', ...Array.from(new Set(menuItems.map(i => i.category)))];
+  async function carregarCardapio(tentativa = 1) {
+    if (tentativa === 1) setMenuState(prev => (prev === 'ready' ? 'ready' : 'loading'));
+    try {
+      const mData = await api.getMenuItems();
+      if ((!mData || mData.length === 0) && tentativa < 3) {
+        await new Promise(r => setTimeout(r, 400 * tentativa));
+        return carregarCardapio(tentativa + 1);
+      }
+      setMenuItems(mData || []);
+      setMenuState('ready');
+      setMenuError('');
+    } catch (err: any) {
+      if (tentativa < 3) {
+        await new Promise(r => setTimeout(r, 400 * tentativa));
+        return carregarCardapio(tentativa + 1);
+      }
+      setMenuState('error');
+      setMenuError(err?.message || 'Não foi possível carregar o cardápio.');
+    }
+  }
 
-  const filteredMenuItems = menuItems.filter(item => {
-    const matchesCategory = activeCategory === 'Todos' || item.category === activeCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          item.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  async function handleOccupyTable(table: Table) {
+    setChangingTable(true);
+    setFeedback(null);
+    try {
+      await api.updateTableStatus(table.id, 'OCCUPIED');
+      setTables(prev => prev.map(t => (t.id === table.id ? { ...t, status: 'OCCUPIED' } : t)));
+      setSelectedTable({ ...table, status: 'OCCUPIED' });
+      setFeedback({ type: 'success', message: `${table.name} ocupada.` });
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Não foi possível ocupar a mesa.' });
+    } finally {
+      setChangingTable(false);
+    }
+  }
 
-  const lastClickTimeRef = React.useRef<{ [key: string]: number }>({});
+  async function handleFreeTable(table: Table) {
+    setChangingTable(true);
+    setFeedback(null);
+    try {
+      const bill = await api.getTableBill(table.id).catch(() => null);
+      if (bill && bill.orders && bill.orders.length > 0) {
+        setFeedback({
+          type: 'error',
+          message: `A ${table.name} tem consumo em aberto (R$ ${Number(bill.total_amount || 0).toFixed(2)}). Feche no caixa antes de liberar.`
+        });
+        return;
+      }
+      if (!window.confirm(`Liberar a ${table.name}?`)) return;
+
+      await api.updateTableStatus(table.id, 'FREE');
+      setTables(prev => prev.map(t => (t.id === table.id ? { ...t, status: 'FREE' } : t)));
+      setSelectedTable({ ...table, status: 'FREE' });
+      setFeedback({ type: 'success', message: `${table.name} liberada.` });
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.message || 'Não foi possível liberar a mesa.' });
+    } finally {
+      setChangingTable(false);
+    }
+  }
+
+  function selecionarMesa(t: Table) {
+    setSelectedTable(t);
+    setFeedback(null);
+    if (isMobile) setStep('MENU');
+  }
+
+  const categories = useMemo(
+    () => ['Todos', ...sortCategories(Array.from(new Set(menuItems.map(i => i.category))))],
+    [menuItems]
+  );
+
+  const filteredMenuItems = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const items = menuItems.filter(item => {
+      const okCat = activeCategory === 'Todos' || item.category === activeCategory;
+      const okBusca = !q || item.name.toLowerCase().includes(q) || (item.description || '').toLowerCase().includes(q);
+      return okCat && okBusca;
+    });
+    return items.sort((a, b) => {
+      const diff = getCategoryIndex(a.category) - getCategoryIndex(b.category);
+      if (diff !== 0) return diff;
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
+  }, [menuItems, activeCategory, searchQuery]);
+
+  const lastClickTimeRef = useRef<{ [key: string]: number }>({});
 
   function addToCart(item: MenuItem) {
     const now = Date.now();
-    const lastTime = lastClickTimeRef.current[item.id] || 0;
-    if (now - lastTime < 50) {
-      return;
-    }
+    if (now - (lastClickTimeRef.current[item.id] || 0) < 50) return;
     lastClickTimeRef.current[item.id] = now;
 
     setCart(prev => {
-      const existingIndex = prev.findIndex(c => c.menuItem.id === item.id);
-      if (existingIndex > -1) {
-        return prev.map((c, idx) =>
-          idx === existingIndex ? { ...c, quantity: c.quantity + 1 } : c
-        );
-      }
+      const idx = prev.findIndex(c => c.menuItem.id === item.id);
+      if (idx > -1) return prev.map((c, i) => (i === idx ? { ...c, quantity: c.quantity + 1 } : c));
       return [...prev, { menuItem: item, quantity: 1, notes: '' }];
     });
   }
 
   function updateQuantity(itemId: string, delta: number) {
-    setCart(prev => {
-      return prev.map(c => {
-        if (c.menuItem.id === itemId) {
-          const newQty = c.quantity + delta;
-          return newQty > 0 ? { ...c, quantity: newQty } : null;
-        }
-        return c;
-      }).filter(Boolean) as CartItem[];
-    });
+    setCart(prev =>
+      prev
+        .map(c => {
+          if (c.menuItem.id !== itemId) return c;
+          const q = c.quantity + delta;
+          return q > 0 ? { ...c, quantity: q } : null;
+        })
+        .filter(Boolean) as CartItem[]
+    );
   }
 
   function updateNotes(itemId: string, notes: string) {
-    setCart(prev => prev.map(c => c.menuItem.id === itemId ? { ...c, notes } : c));
+    setCart(prev => prev.map(c => (c.menuItem.id === itemId ? { ...c, notes } : c)));
   }
 
-  const cartTotal = cart.reduce((acc, item) => acc + (item.menuItem.price * item.quantity), 0);
-  const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+  function qtyNoCarrinho(itemId: string): number {
+    return cart.find(c => c.menuItem.id === itemId)?.quantity || 0;
+  }
+
+  const cartTotal = cart.reduce((acc, i) => acc + i.menuItem.price * i.quantity, 0);
+  const cartItemCount = cart.reduce((acc, i) => acc + i.quantity, 0);
+  const suggestedTax = calcServiceTax(cartTotal, taxPercent);
 
   async function handleSendOrder() {
     if (!selectedTable) {
-      setFeedback({ type: 'error', message: 'Selecione uma mesa antes de enviar o pedido.' });
+      setFeedback({ type: 'error', message: 'Escolha uma mesa antes de enviar o pedido.' });
+      if (isMobile) setStep('TABLES');
       return;
     }
     if (cart.length === 0) {
-      setFeedback({ type: 'error', message: 'Adicione pelo menos um item ao carrinho.' });
+      setFeedback({ type: 'error', message: 'Adicione pelo menos um item ao pedido.' });
       return;
     }
 
     setLoading(true);
     setFeedback(null);
 
-    const formattedItems = cart.map(c => ({
+    const items = cart.map(c => ({
       menu_item_id: c.menuItem.id,
       quantity: c.quantity,
       notes: c.notes || undefined
     }));
-
-    const syncId = `off_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const syncId = `off_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
     try {
       if (isOnline) {
-        await api.createOrder(selectedTable.id, formattedItems, syncId);
-        setFeedback({ type: 'success', message: `Pedido da ${selectedTable.name} enviado com sucesso!` });
+        await api.createOrder(selectedTable.id, items, syncId);
+        setFeedback({ type: 'success', message: `Pedido da ${selectedTable.name} enviado para a produção.` });
       } else {
         if (offlineDb) {
           await offlineDb.offlineOrders.add({
             offline_sync_id: syncId,
             table_id: selectedTable.id,
             table_number: selectedTable.number,
-            items: formattedItems,
-            notes: orderNotes,
+            items,
+            notes: '',
             created_at: new Date().toISOString(),
             synced: 0
           });
         }
-        setFeedback({ type: 'success', message: `Modo Offline: Pedido salvo no dispositivo. Será sincronizado ao reconectar.` });
+        setFeedback({ type: 'success', message: 'Sem conexão: o pedido foi salvo e será enviado automaticamente.' });
       }
 
       setCart([]);
-      setOrderNotes('');
-      setShowMobileCart(false);
       onOrderCreated();
-      loadDataBackground();
+      carregarMesas();
+      if (isMobile) setStep('TABLES');
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.message || 'Erro ao processar pedido.' });
+      setFeedback({ type: 'error', message: err.message || 'Não foi possível enviar o pedido.' });
     } finally {
       setLoading(false);
     }
   }
 
-  return (
-    <div style={{ padding: '12px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-      
-      {/* Grid Principal Adaptável que vira Flex ColUNA no Celular sem overflow */}
-      <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '16px' }}>
-        
-        {/* Painel Esquerdo: Mapa de Mesas & Cardápio */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
-          
-          {/* Seção Mapa de Mesas */}
-          <div className="clean-card" style={{ padding: '14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <h2 style={{ fontSize: '1rem' }}>Mapa de Mesas</h2>
-                {refreshing && <RefreshCw size={14} className="spin" color="var(--accent-blue)" />}
-              </div>
+  const freeCount = tables.filter(t => t.status === 'FREE').length;
 
-              <div style={{ display: 'flex', gap: '6px', fontSize: '0.7rem' }}>
-                <span className="badge badge-free" style={{ padding: '2px 8px' }}>Livre</span>
-                <span className="badge badge-occupied" style={{ padding: '2px 8px' }}>Ocupada</span>
-                <span className="badge badge-pending" style={{ padding: '2px 8px' }}>Pagamento</span>
-              </div>
-            </div>
+  // ======================================================== BLOCOS DE TELA
 
-            {/* Grid de Mesas Responsivo para Toque no Celular */}
-            <div className="waiter-table-grid" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
-              gap: '8px',
-              width: '100%'
-            }}>
-              {tables.map(t => {
-                const isSelected = selectedTable?.id === t.id;
-                let bg = '#FFFFFF';
-                let border = 'var(--border-light)';
-                let badgeClass = 'badge-free';
+  const blocoFeedback = feedback && (
+    <div className={`alert ${feedback.type === 'success' ? 'alert-success' : 'alert-error'}`}>
+      {feedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+      {feedback.message}
+    </div>
+  );
 
-                if (t.status === 'OCCUPIED') badgeClass = 'badge-occupied';
-                if (t.status === 'PAYMENT_PENDING') badgeClass = 'badge-pending';
-
-                if (isSelected) {
-                  border = 'var(--accent-blue)';
-                  bg = 'var(--accent-blue-light)';
-                }
-
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => setSelectedTable(t)}
-                    style={{
-                      background: bg,
-                      border: `2px solid ${border}`,
-                      borderRadius: 'var(--radius-md)',
-                      padding: '10px 4px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '4px',
-                      cursor: 'pointer',
-                      minHeight: '60px',
-                      transition: 'all 0.15s ease',
-                      width: '100%',
-                      boxShadow: isSelected ? '0 4px 12px rgba(2, 132, 199, 0.15)' : 'none'
-                    }}
-                  >
-                    <span style={{ fontSize: '0.95rem', fontWeight: 800 }}>
-                      Mesa {t.number}
-                    </span>
-                    <span className={`badge ${badgeClass}`} style={{ fontSize: '0.58rem', padding: '2px 4px' }}>
-                      {t.status === 'FREE' ? 'Livre' : t.status === 'OCCUPIED' ? 'Ocupada' : 'Pagamento'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Seção Seleção de Produtos do Cardápio */}
-          <div className="clean-card" style={{ padding: '14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-              <h2 style={{ fontSize: '1rem' }}>Cardápio de Produtos</h2>
-
-              {/* Input Busca no Celular */}
-              <div style={{ position: 'relative', width: '100%', maxWidth: '220px' }}>
-                <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                <input
-                  type="text"
-                  placeholder="Buscar produto..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '6px 12px 6px 32px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border-light)',
-                    fontSize: '0.82rem',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Abas de Categorias Roláveis no Celular */}
-            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px', marginBottom: '12px', WebkitOverflowScrolling: 'touch', width: '100%' }}>
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 'var(--radius-full)',
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                    border: '1px solid',
-                    borderColor: activeCategory === cat ? 'var(--accent-blue)' : 'var(--border-light)',
-                    background: activeCategory === cat ? 'var(--accent-blue-light)' : '#FFFFFF',
-                    color: activeCategory === cat ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    minHeight: '36px'
-                  }}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            {/* Grid de Pratos 100% Ajustável sem estouro lateral */}
-            <div className="waiter-menu-grid" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-              gap: '10px',
-              width: '100%'
-            }}>
-              {filteredMenuItems.map(item => (
-                <div
-                  key={item.id}
-                  style={{
-                    border: '1px solid var(--border-light)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '10px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    gap: '6px',
-                    background: '#FFFFFF',
-                    width: '100%'
-                  }}
-                >
-                  <div>
-                    <span style={{ fontSize: '0.62rem', color: 'var(--accent-emerald)', fontWeight: 700, textTransform: 'uppercase' }}>
-                      {item.category}
-                    </span>
-                    <h3 style={{ fontSize: '0.85rem', margin: '2px 0', lineHeight: 1.2 }}>{item.name}</h3>
-                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
-                      {item.description}
-                    </p>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                      R$ {item.price.toFixed(2)}
-                    </span>
-                    <button
-                      onClick={() => addToCart(item)}
-                      className="btn btn-primary"
-                      style={{ padding: '4px 8px', fontSize: '0.75rem', minHeight: '34px' }}
-                    >
-                      <Plus size={14} /> Add
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
+  const blocoMesas = (
+    <div className="card card-pad">
+      <div className="card-head">
+        <div>
+          <h2>Mesas</h2>
+          <div className="hint">{freeCount} de {tables.length} livres</div>
         </div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <span className="badge badge-free">Livre</span>
+          <span className="badge badge-occupied">Ocupada</span>
+          <span className="badge badge-pending">Pagamento</span>
+        </div>
+      </div>
 
-        {/* Painel Direito / Carrinho Desktop & Mobile Drawer */}
-        <div className={`clean-card ${showMobileCart ? 'mobile-cart-fixed' : 'desktop-cart-sidebar'}`} style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: 'fit-content', width: '100%' }}>
-          
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border-light)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShoppingBag size={20} color="var(--accent-blue)" />
-              <div>
-                <h2 style={{ fontSize: '1rem' }}>Comanda do Pedido</h2>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  {selectedTable ? `Lançando para ${selectedTable.name}` : 'Selecione uma mesa'}
-                </span>
-              </div>
+      {/* Rolagem própria também no celular */}
+      <div className="table-grid scroll-area scroll-tables-grid">
+        {tables.map(t => (
+          <button
+            key={t.id}
+            onClick={() => selecionarMesa(t)}
+            onDoubleClick={() => (!isMobile && (t.status === 'FREE' ? handleOccupyTable(t) : handleFreeTable(t)))}
+            className={`table-chip ${selectedTable?.id === t.id ? 'is-active' : ''} status-${String(t.status).toLowerCase()}`}
+          >
+            <span className="table-chip-num">{t.number}</span>
+            <span className="table-chip-status">
+              {t.status === 'FREE' ? 'Livre' : t.status === 'OCCUPIED' ? 'Ocupada' : 'Pagando'}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {selectedTable && (
+        <div className="table-actions">
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: '0.92rem' }}>{selectedTable.name}</div>
+            <div className="hint">
+              {selectedTable.status === 'FREE' ? 'Marque como ocupada quando o cliente sentar.' : 'Em atendimento.'}
             </div>
+          </div>
 
-            {showMobileCart && (
-              <button onClick={() => setShowMobileCart(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X size={20} color="var(--text-muted)" />
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            {selectedTable.status === 'FREE' ? (
+              <button onClick={() => handleOccupyTable(selectedTable)} disabled={changingTable} className="btn btn-primary btn-sm">
+                <UserPlus size={15} /> Ocupar
+              </button>
+            ) : (
+              <button onClick={() => handleFreeTable(selectedTable)} disabled={changingTable} className="btn btn-outline btn-sm">
+                <DoorOpen size={15} /> Liberar
+              </button>
+            )}
+            {isMobile && (
+              <button onClick={() => setStep('MENU')} className="btn btn-success btn-sm">
+                <Utensils size={15} /> Pedir
               </button>
             )}
           </div>
-
-          {feedback && (
-            <div style={{
-              marginTop: '10px',
-              padding: '8px 12px',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.8rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: feedback.type === 'success' ? 'var(--accent-emerald-light)' : '#FEE2E2',
-              color: feedback.type === 'success' ? '#065F46' : '#991B1B'
-            }}>
-              {feedback.type === 'success' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-              {feedback.message}
-            </div>
-          )}
-
-          {/* Lista de Itens no Carrinho */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '12px 0', maxHeight: '340px', overflowY: 'auto' }}>
-            {cart.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px 10px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                Selecione os pratos no cardápio para adicionar ao pedido da mesa.
-              </div>
-            ) : (
-              cart.map(c => (
-                <div key={c.menuItem.id} style={{ padding: '8px 10px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>{c.menuItem.name}</span>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        R$ {c.menuItem.price.toFixed(2)} un
-                      </div>
-                    </div>
-                    <span style={{ fontWeight: 800, fontSize: '0.88rem' }}>
-                      R$ {(c.menuItem.price * c.quantity).toFixed(2)}
-                    </span>
-                  </div>
-
-                  {/* Controles de Quantidade Otimizados para Celular */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
-                    <input
-                      type="text"
-                      placeholder="Obs: sem cebola..."
-                      value={c.notes}
-                      onChange={e => updateNotes(c.menuItem.id, e.target.value)}
-                      style={{
-                        padding: '4px 6px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--border-light)',
-                        fontSize: '0.75rem',
-                        flex: 1
-                      }}
-                    />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#FFFFFF', padding: '2px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
-                      <button onClick={() => updateQuantity(c.menuItem.id, -1)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                        <Minus size={13} />
-                      </button>
-                      <span style={{ fontWeight: 700, fontSize: '0.85rem', minWidth: '16px', textAlign: 'center' }}>{c.quantity}</span>
-                      <button onClick={() => updateQuantity(c.menuItem.id, 1)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                        <Plus size={13} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Resumo Financeiro & Envio */}
-          <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              <span>Subtotal (Sem 10%):</span>
-              <span style={{ fontWeight: 700 }}>R$ {cartTotal.toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--accent-emerald)' }}>
-              <span>Sugestão Garçom (10%):</span>
-              <span style={{ fontWeight: 700 }}>+ R$ {(cartTotal * 0.10).toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-light)', paddingTop: '4px' }}>
-              <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Total Estimado (c/ 10%):</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent-blue)' }}>
-                R$ {(cartTotal * 1.10).toFixed(2)}
-              </span>
-            </div>
-
-            <button
-              onClick={handleSendOrder}
-              disabled={loading || cart.length === 0}
-              className="btn btn-success"
-              style={{ width: '100%', padding: '10px', fontSize: '0.92rem', minHeight: '44px' }}
-            >
-              <Send size={16} />
-              {loading ? 'Enviando...' : 'Enviar Pedido para Produção'}
-            </button>
-          </div>
-
         </div>
+      )}
+    </div>
+  );
 
+  const blocoCardapio = (
+    <div className="card card-pad">
+      <div className="card-head">
+        <h2>Cardápio</h2>
+        <div className="input-group" style={{ maxWidth: isMobile ? 'none' : '260px' }}>
+          <span className="input-icon"><Search size={16} /></span>
+          <input
+            type="text"
+            placeholder="Buscar produto"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="input"
+            disabled={menuState !== 'ready'}
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="input-clear" title="Limpar busca"><X size={15} /></button>
+          )}
+        </div>
       </div>
 
-      {/* 📱 Barra Flutuante Mobile do Carrinho para o Garçom no Celular */}
-      {cartItemCount > 0 && !showMobileCart && (
-        <div
-          className="mobile-cart-floating-bar"
-          onClick={() => setShowMobileCart(true)}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShoppingBag size={18} />
-            <span>{cartItemCount} {cartItemCount === 1 ? 'item' : 'itens'} na comanda</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>R$ {cartTotal.toFixed(2)}</span>
-            <ChevronUp size={18} />
-          </div>
+      {menuState === 'loading' && (
+        <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+          <RefreshCw size={26} className="spin" color="var(--text-muted)" />
+          Carregando o cardápio...
         </div>
       )}
 
+      {menuState === 'error' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="alert alert-error"><AlertCircle size={17} /> {menuError}</div>
+          <button onClick={() => carregarCardapio()} className="btn btn-primary">
+            <RefreshCw size={16} /> Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {menuState === 'ready' && (
+        <>
+          <div className="filter-scroll" style={{ marginBottom: '10px' }}>
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`btn btn-sm ${activeCategory === cat ? 'btn-primary' : 'btn-outline'}`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <div className="list-meta">
+            <span>
+              {filteredMenuItems.length} produto{filteredMenuItems.length === 1 ? '' : 's'}
+              {activeCategory !== 'Todos' ? ` em ${activeCategory}` : ''}
+            </span>
+          </div>
+
+          {/* Rolagem própria também no celular: a página não estica */}
+          <div className="menu-grid scroll-area scroll-menu">
+            {filteredMenuItems.map(item => {
+              const qtd = qtyNoCarrinho(item.id);
+              return (
+                <div key={item.id} className={`menu-card ${qtd > 0 ? 'has-qty' : ''}`}>
+                  {/* Área de toque para adicionar */}
+                  <button className="menu-card-add" onClick={() => addToCart(item)} title={`Adicionar ${item.name}`}>
+                    <span className="menu-card-cat">{item.category}</span>
+                    <span className="menu-card-name">{item.name}</span>
+                    <span className="menu-card-price">R$ {item.price.toFixed(2)}</span>
+                  </button>
+
+                  {/* Controles de quantidade, direto no cardápio */}
+                  {qtd > 0 ? (
+                    <div className="menu-card-stepper">
+                      <button onClick={() => updateQuantity(item.id, -1)} title="Remover um">
+                        <Minus size={16} />
+                      </button>
+                      <span>{qtd}</span>
+                      <button onClick={() => addToCart(item)} title="Adicionar um">
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button className="menu-card-plus" onClick={() => addToCart(item)}>
+                      <Plus size={15} /> Adicionar
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {filteredMenuItems.length === 0 && (
+              <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+                {menuItems.length === 0
+                  ? 'Nenhum produto cadastrado. Adicione itens em Gestão > Cardápio.'
+                  : 'Nenhum produto encontrado com esse filtro.'}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const blocoComanda = (
+    <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div className="card-head" style={{ marginBottom: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <ShoppingBag size={18} color="var(--text-secondary)" />
+          <div style={{ minWidth: 0 }}>
+            <h2>Comanda</h2>
+            <div className="hint">{selectedTable ? `Para ${selectedTable.name}` : 'Selecione uma mesa'}</div>
+          </div>
+        </div>
+        {cart.length > 0 && (
+          <button onClick={() => setCart([])} className="btn btn-danger-soft btn-sm">
+            <Trash2 size={14} /> Limpar
+          </button>
+        )}
+      </div>
+
+      {!isMobile && blocoFeedback}
+
+      <div className="scroll-area scroll-cart" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {cart.length === 0 ? (
+          <div className="empty-state">Toque nos produtos do cardápio para montar o pedido.</div>
+        ) : (
+          cart.map(c => (
+            <div key={c.menuItem.id} className="cart-line">
+              <div className="cart-line-head">
+                <div style={{ minWidth: 0 }}>
+                  <div className="cart-line-name">{c.menuItem.name}</div>
+                  <div className="hint">R$ {c.menuItem.price.toFixed(2)} cada</div>
+                </div>
+                <span className="money">R$ {(c.menuItem.price * c.quantity).toFixed(2)}</span>
+              </div>
+
+              <div className="cart-line-controls">
+                <input
+                  type="text"
+                  placeholder="Observação (ex.: sem cebola)"
+                  value={c.notes}
+                  onChange={e => updateNotes(c.menuItem.id, e.target.value)}
+                  className="input"
+                  style={{ flex: 1, minWidth: 0 }}
+                />
+                <div className="stepper">
+                  <button onClick={() => updateQuantity(c.menuItem.id, -1)} title="Diminuir"><Minus size={16} /></button>
+                  <span>{c.quantity}</span>
+                  <button onClick={() => updateQuantity(c.menuItem.id, 1)} title="Aumentar"><Plus size={16} /></button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div className="summary-row">
+          <span>Consumo</span>
+          <span className="money">R$ {cartTotal.toFixed(2)}</span>
+        </div>
+        {taxPercent > 0 && (
+          <div className="summary-row">
+            <span>Taxa sugerida ({formatPercent(taxPercent)}%)</span>
+            <span className="money">+ R$ {suggestedTax.toFixed(2)}</span>
+          </div>
+        )}
+        <div className="summary-total">
+          <span className="label-total">Total estimado</span>
+          <span className="value-total">R$ {(cartTotal + suggestedTax).toFixed(2)}</span>
+        </div>
+        <span className="hint">A taxa é confirmada no caixa, junto com o cliente.</span>
+
+        <button
+          onClick={handleSendOrder}
+          disabled={loading || cart.length === 0}
+          className="btn btn-success btn-block btn-lg"
+          style={{ marginTop: '4px' }}
+        >
+          <Send size={16} /> {loading ? 'Enviando...' : 'Enviar pedido'}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ============================================================== COMPUTADOR
+  if (!isMobile) {
+    return (
+      <div className="page">
+        {blocoFeedback}
+        <div className="split-layout">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {blocoMesas}
+            {blocoCardapio}
+          </div>
+          {blocoComanda}
+        </div>
+      </div>
+    );
+  }
+
+  // ================================================================= CELULAR
+  return (
+    <div className="page waiter-mobile">
+      <div className="step-bar">
+        <button onClick={() => setStep('TABLES')} className={step === 'TABLES' ? 'is-active' : ''}>
+          <LayoutGrid size={16} />
+          Mesas
+        </button>
+        <button onClick={() => setStep('MENU')} className={step === 'MENU' ? 'is-active' : ''}>
+          <Utensils size={16} />
+          Cardápio
+        </button>
+        <button onClick={() => setStep('CART')} className={step === 'CART' ? 'is-active' : ''}>
+          <ShoppingBag size={16} />
+          Comanda
+          {cartItemCount > 0 && <span className="step-badge">{cartItemCount}</span>}
+        </button>
+      </div>
+
+      {selectedTable && step !== 'TABLES' && (
+        <button onClick={() => setStep('TABLES')} className="current-table">
+          <ArrowLeft size={15} />
+          <span><strong>{selectedTable.name}</strong> · trocar</span>
+          <span className={`badge ${selectedTable.status === 'FREE' ? 'badge-free' : selectedTable.status === 'OCCUPIED' ? 'badge-occupied' : 'badge-pending'}`}>
+            {selectedTable.status === 'FREE' ? 'Livre' : selectedTable.status === 'OCCUPIED' ? 'Ocupada' : 'Pagando'}
+          </span>
+        </button>
+      )}
+
+      {blocoFeedback}
+
+      {step === 'TABLES' && blocoMesas}
+      {step === 'MENU' && blocoCardapio}
+      {step === 'CART' && blocoComanda}
+
+      {cartItemCount > 0 && step !== 'CART' && (
+        <button onClick={() => setStep('CART')} className="cart-bar">
+          <span>
+            <ShoppingBag size={17} />
+            {cartItemCount} {cartItemCount === 1 ? 'item' : 'itens'}
+          </span>
+          <span>R$ {cartTotal.toFixed(2)} · ver comanda</span>
+        </button>
+      )}
     </div>
   );
 };

@@ -1,200 +1,303 @@
-import React, { useState, useEffect } from 'react';
-import type { Order } from '../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import type { Order, OrderItem } from '../types';
 import { api } from '../services/api';
 import { socket } from '../services/socket';
-import { Clock, CheckCircle2, Play, AlertCircle, ChefHat, GlassWater } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, ChefHat, GlassWater, RotateCcw, RefreshCw } from 'lucide-react';
 
 interface KitchenScreenProps {
   type?: 'FOOD' | 'BAR';
 }
 
+type QueueFilter = 'TODO' | 'DONE';
+
+function hojeStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Guarda local dos pedidos concluídos.
+ *
+ * MOTIVO: a fila do backend (/kitchen/queue) devolve apenas pedidos em aberto.
+ * Assim que o pedido é marcado como pronto, ele some da resposta — por isso a
+ * aba "Prontos" aparecia sempre vazia. Mantemos aqui uma cópia do pedido
+ * concluído, válida para o dia corrente, para que a equipe possa conferir e
+ * desfazer. A chave inclui o dia e o setor (cozinha ou bar).
+ */
+function chaveArmazenamento(type: string): string {
+  return `kds_prontos_${type}_${hojeStr()}`;
+}
+
+function lerProntosSalvos(type: string): Order[] {
+  try {
+    const bruto = localStorage.getItem(chaveArmazenamento(type));
+    if (!bruto) return [];
+    const dados = JSON.parse(bruto);
+    return Array.isArray(dados) ? dados : [];
+  } catch {
+    return [];
+  }
+}
+
+function salvarProntos(type: string, pedidos: Order[]): void {
+  try {
+    localStorage.setItem(chaveArmazenamento(type), JSON.stringify(pedidos));
+    // Limpa registros de dias anteriores
+    const prefixo = `kds_prontos_${type}_`;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(prefixo) && k !== chaveArmazenamento(type)) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch {
+    // Sem espaço ou modo privativo: segue sem persistir.
+  }
+}
+
 export const KitchenScreen: React.FC<KitchenScreenProps> = ({ type = 'FOOD' }) => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [prontos, setProntos] = useState<Order[]>(() => lerProntosSalvos(type));
   const [loading, setLoading] = useState<boolean>(true);
-
+  const [busyOrders, setBusyOrders] = useState<Record<string, boolean>>({});
+  const [filter, setFilter] = useState<QueueFilter>('TODO');
+  const [error, setError] = useState<string | null>(null);
   const isBar = type === 'BAR';
 
-  useEffect(() => {
-    loadQueue();
-
-    if (socket) {
-      socket.on('order:created', () => {
-        loadQueue();
-      });
-
-      socket.on('order:status_changed', () => {
-        loadQueue();
-      });
-    }
-
-    return () => {
-      if (socket) {
-        socket.off('order:created');
-        socket.off('order:status_changed');
-      }
-    };
-  }, [type]);
-
-  async function loadQueue() {
+  const loadQueue = useCallback(async () => {
     try {
       const data = isBar ? await api.getBarQueue() : await api.getKitchenQueue();
-      setOrders(data);
-    } catch (err) {
-      console.error(`Erro ao carregar fila (${type}):`, err);
+      setOrders(Array.isArray(data) ? data : []);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Não foi possível carregar a fila.');
     } finally {
       setLoading(false);
     }
+  }, [isBar]);
+
+  useEffect(() => {
+    setProntos(lerProntosSalvos(type));
+    setFilter('TODO');
+    loadQueue();
+
+    if (socket) {
+      socket.on('order:created', loadQueue);
+      socket.on('order:status_changed', loadQueue);
+    }
+    const poll = setInterval(loadQueue, 20000);
+
+    return () => {
+      clearInterval(poll);
+      if (socket) {
+        socket.off('order:created', loadQueue);
+        socket.off('order:status_changed', loadQueue);
+      }
+    };
+  }, [type, loadQueue]);
+
+  function isItemDone(item: OrderItem): boolean {
+    return item.status === 'READY' || item.status === 'DELIVERED';
   }
 
-  async function handleBatchUpdateStatus(orderId: string, newStatus: 'PREPARING' | 'READY') {
+  function isOrderDone(order: Order): boolean {
+    const items = order.items || [];
+    return items.length > 0 && items.every(isItemDone);
+  }
+
+  /** Marca o pedido inteiro como pronto e o move para a aba Prontos. */
+  async function concluirPedido(order: Order) {
+    setBusyOrders(prev => ({ ...prev, [order.id]: true }));
+    setError(null);
+
+    // Some da fila imediatamente e já aparece em Prontos.
+    const concluido: Order = {
+      ...order,
+      items: (order.items || []).map(it => ({ ...it, status: 'READY' as const }))
+    };
+    setOrders(prev => prev.filter(o => o.id !== order.id));
+    setProntos(prev => {
+      const novo = [concluido, ...prev.filter(o => o.id !== order.id)];
+      salvarProntos(type, novo);
+      return novo;
+    });
+
     try {
-      await api.updateOrderBatchStatus(orderId, newStatus, type);
-      loadQueue();
+      await api.updateOrderBatchStatus(order.id, 'READY', type);
+      await loadQueue();
     } catch (err: any) {
-      alert(`Erro ao atualizar status: ${err.message}`);
+      setError(err.message || 'Não foi possível concluir o pedido. Ele voltou para a fila.');
+      // Desfaz a mudança local se o servidor recusou.
+      setProntos(prev => {
+        const novo = prev.filter(o => o.id !== order.id);
+        salvarProntos(type, novo);
+        return novo;
+      });
+      await loadQueue();
+    } finally {
+      setBusyOrders(prev => {
+        const next = { ...prev };
+        delete next[order.id];
+        return next;
+      });
+    }
+  }
+
+  /** Devolve o pedido para a fila. */
+  async function desfazerPedido(order: Order) {
+    setBusyOrders(prev => ({ ...prev, [order.id]: true }));
+    setError(null);
+
+    setProntos(prev => {
+      const novo = prev.filter(o => o.id !== order.id);
+      salvarProntos(type, novo);
+      return novo;
+    });
+
+    try {
+      await api.updateOrderBatchStatus(order.id, 'PENDING', type);
+      await loadQueue();
+      setFilter('TODO');
+    } catch (err: any) {
+      setError(err.message || 'Não foi possível desfazer. Tente novamente.');
+      setProntos(prev => {
+        const novo = [order, ...prev];
+        salvarProntos(type, novo);
+        return novo;
+      });
+    } finally {
+      setBusyOrders(prev => {
+        const next = { ...prev };
+        delete next[order.id];
+        return next;
+      });
     }
   }
 
   function getTimeElapsed(createdAt: string): string {
-    const minutes = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
-    if (minutes < 1) return 'Agora mesmo';
-    return `Há ${minutes} min`;
+    const minutos = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+    if (minutos < 1) return 'Agora mesmo';
+    if (minutos < 60) return `Há ${minutos} min`;
+    const horas = Math.floor(minutos / 60);
+    return `Há ${horas}h${String(minutos % 60).padStart(2, '0')}`;
   }
 
-  return (
-    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {isBar ? <GlassWater size={28} color="#0284C7" /> : <ChefHat size={28} color="var(--accent-emerald)" />}
-            <h1 className="kds-tv-title" style={{ fontSize: '1.4rem' }}>
-              {isBar ? 'Painel do Bar (Bebidas)' : 'Painel da Cozinha (KDS Pratos)'}
-            </h1>
-          </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            {isBar
-              ? 'Gerenciamento exclusivo de drinks, sucos e bebidas em tempo real'
-              : 'Gerenciamento exclusivo de lanches, porções e pratos em tempo real'}
-          </p>
-        </div>
+  // A fila do backend pode trazer pedidos já prontos; removemos para não duplicar.
+  const idsProntos = new Set(prontos.map(o => o.id));
+  const pedidosAFazer = orders.filter(o => !isOrderDone(o) && !idsProntos.has(o.id));
+  const visibleOrders = filter === 'TODO' ? pedidosAFazer : prontos;
 
-        <div className="badge badge-free" style={{ padding: '8px 14px', fontSize: '0.8rem' }}>
-          <Clock size={14} /> Atualização em Tempo Real Ativa
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {isBar ? <GlassWater size={20} color="var(--text-secondary)" /> : <ChefHat size={20} color="var(--text-secondary)" />}
+            <span className="kds-tv-title">{isBar ? 'Bar' : 'Cozinha'}</span>
+          </h1>
+          <div className="page-subtitle">
+            Toque em "Pedido pronto" quando terminar todos os itens da mesa.
+          </div>
         </div>
+        <button onClick={loadQueue} className="btn btn-outline btn-sm">
+          <RefreshCw size={15} /> Atualizar
+        </button>
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
-          Carregando comandas de {isBar ? 'bebidas' : 'pratos'}...
+      {error && (
+        <div className="alert alert-error">
+          <AlertCircle size={17} /> {error}
         </div>
-      ) : orders.length === 0 ? (
-        <div className="clean-card" style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
-          <CheckCircle2 size={48} color="var(--accent-emerald)" style={{ marginBottom: '12px' }} />
-          <h3>Nenhum pedido pendente no {isBar ? 'Bar' : 'KDS da Cozinha'}!</h3>
-          <p style={{ fontSize: '0.85rem' }}>
-            {isBar ? 'Todas as bebidas foram preparadas.' : 'Todos os pratos foram preparados e entregues.'}
+      )}
+
+      <div className="segmented" style={{ maxWidth: '420px' }}>
+        <button onClick={() => setFilter('TODO')} className={filter === 'TODO' ? 'is-active' : ''}>
+          A fazer ({pedidosAFazer.length})
+        </button>
+        <button onClick={() => setFilter('DONE')} className={filter === 'DONE' ? 'is-active' : ''}>
+          Prontos ({prontos.length})
+        </button>
+      </div>
+
+      {filter === 'DONE' && prontos.length > 0 && (
+        <div className="alert alert-info">
+          <AlertCircle size={16} />
+          Os pedidos ficam aqui até o fim do dia. Use "Desfazer" se algum foi marcado por engano.
+        </div>
+      )}
+
+      {loading ? (
+        <div className="empty-state">Carregando pedidos...</div>
+      ) : visibleOrders.length === 0 ? (
+        <div className="card card-pad empty-state">
+          <CheckCircle2 size={38} color="var(--green)" style={{ marginBottom: '10px' }} />
+          <h2>{filter === 'TODO' ? 'Tudo pronto!' : 'Nenhum pedido concluído hoje'}</h2>
+          <p className="hint" style={{ marginTop: '4px' }}>
+            {filter === 'TODO'
+              ? isBar ? 'Não há bebidas na fila.' : 'Não há pratos na fila.'
+              : 'Os pedidos concluídos aparecem aqui.'}
           </p>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-          gap: '20px'
-        }}>
-          {orders.map(order => {
-            const anyPending = order.items?.some(i => i.status === 'PENDING');
-            const isPreparing = !anyPending && order.items?.some(i => i.status === 'PREPARING');
+        <div className="kds-grid">
+          {visibleOrders.map(order => {
+            const concluido = filter === 'DONE';
+            const ocupado = !!busyOrders[order.id];
+            const itens = order.items || [];
+            const totalItens = itens.reduce((acc, i) => acc + i.quantity, 0);
 
             return (
               <div
                 key={order.id}
-                className="clean-card animate-fade-in"
-                style={{
-                  padding: '18px',
-                  borderLeft: `6px solid ${isBar ? '#0284C7' : 'var(--accent-emerald)'}`,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  gap: '16px'
-                }}
+                className={`card card-pad animate-fade-in kds-order ${concluido ? 'is-done' : ''}`}
               >
-                <div>
-                  {/* Header do Card com Alta Visibilidade em TVs */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-light)', paddingBottom: '10px', marginBottom: '12px' }}>
-                    <div>
-                      <span className="kds-tv-card-header" style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                        Mesa {order.table_number || order.table_id}
-                      </span>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                        Atendido por: {order.waiter_name || 'Garçom'}
-                      </div>
+                <div className="kds-order-head">
+                  <div style={{ minWidth: 0 }}>
+                    <div className="kds-order-table">
+                      Mesa {order.table_number || order.table_id}
                     </div>
-
-                    <span className="badge badge-pending" style={{ fontSize: '0.78rem', padding: '6px 10px' }}>
-                      <Clock size={14} /> {getTimeElapsed(order.created_at)}
-                    </span>
+                    <div className="kds-order-meta">
+                      {order.waiter_name || 'Garçom'} · {totalItens} {totalItens === 1 ? 'item' : 'itens'}
+                    </div>
                   </div>
+                  <span className={`badge ${concluido ? 'badge-free' : 'badge-pending'}`}>
+                    <Clock size={13} /> {getTimeElapsed(order.created_at)}
+                  </span>
+                </div>
 
-                  {/* Lista de Itens do Pedido */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                    {order.items?.map(item => (
-                      <div
-                        key={item.id}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: 'var(--radius-sm)',
-                          background: item.status === 'PREPARING' ? (isBar ? '#E0F2FE' : 'var(--accent-emerald-light)') : 'var(--bg-subtle)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '4px'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontWeight: 700, fontSize: '1rem' }}>
-                            {item.quantity}x {item.menu_item_name || 'Item'}
-                          </span>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: item.status === 'PREPARING' ? 'var(--accent-blue)' : 'var(--text-secondary)' }}>
-                            {item.status === 'PENDING' ? 'PENDENTE' : item.status === 'PREPARING' ? 'EM PREPARO' : 'PRONTO'}
-                          </span>
-                        </div>
-
+                <ul className="kds-list">
+                  {itens.map(item => (
+                    <li key={item.id} className="kds-line">
+                      <span className="kds-line-qty">{item.quantity}x</span>
+                      <span className="kds-line-body">
+                        <span className="kds-line-name">{item.menu_item_name || 'Item'}</span>
                         {item.notes && (
-                          <div style={{ fontSize: '0.8rem', color: '#B45309', background: '#FEF3C7', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                            <AlertCircle size={14} /> Obs: {item.notes}
-                          </div>
+                          <span className="kds-line-note">
+                            <AlertCircle size={13} /> {item.notes}
+                          </span>
                         )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
 
-                {/* BOTÃO ÚNICO PARA TODA A MESA DE ALTA VISIBILIDADE */}
-                <div>
-                  {anyPending ? (
-                    <button
-                      onClick={() => handleBatchUpdateStatus(order.id, 'PREPARING')}
-                      className="btn btn-primary kds-tv-btn"
-                      style={{ width: '100%', padding: '14px', fontSize: '1rem', background: isBar ? '#0284C7' : undefined }}
-                    >
-                      <Play size={18} />
-                      {isBar ? '🍸 Iniciar Preparo das Bebidas' : '👨‍🍳 Iniciar Preparo dos Pratos'}
-                    </button>
-                  ) : isPreparing ? (
-                    <button
-                      onClick={() => handleBatchUpdateStatus(order.id, 'READY')}
-                      className="btn btn-success kds-tv-btn"
-                      style={{ width: '100%', padding: '14px', fontSize: '1rem' }}
-                    >
-                      <CheckCircle2 size={18} />
-                      {isBar ? '✅ Marcar Bebidas Prontas' : '✅ Marcar Pratos Prontos'}
-                    </button>
-                  ) : (
-                    <div style={{ textTransform: 'uppercase', textAlign: 'center', fontWeight: 800, color: 'var(--accent-emerald)', fontSize: '0.95rem', padding: '10px' }}>
-                      ✅ Pedido Pronto
-                    </div>
-                  )}
-                </div>
-
+                {concluido ? (
+                  <button
+                    onClick={() => desfazerPedido(order)}
+                    disabled={ocupado}
+                    className="kds-toggle is-done"
+                  >
+                    <RotateCcw size={18} /> {ocupado ? 'Aguarde...' : 'Desfazer'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => concluirPedido(order)}
+                    disabled={ocupado}
+                    className="kds-toggle"
+                  >
+                    <CheckCircle2 size={22} /> {ocupado ? 'Salvando...' : 'Pedido pronto'}
+                  </button>
+                )}
               </div>
             );
           })}

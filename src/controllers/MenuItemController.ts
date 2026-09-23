@@ -18,7 +18,8 @@ export const createMenuItemSchema = z.object({
 export class MenuItemController {
   static async listAll(req: Request, res: Response, next: NextFunction) {
     try {
-      const items = MenuItemService.listAll();
+      const includeInactive = req.query.all === 'true' || req.query.includeInactive === 'true' || (req as any).user?.role === 'ADMIN';
+      const items = MenuItemService.listAll(includeInactive);
       res.json(items);
     } catch (err) {
       next(err);

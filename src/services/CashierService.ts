@@ -1,4 +1,4 @@
-import { CashierRepository } from '../repositories/CashierRepository.js';
+import { CashierRepository, getServiceTaxPercent } from '../repositories/CashierRepository.js';
 import { TableRepository } from '../repositories/TableRepository.js';
 import { CashRegisterSession, PaymentMethod, DailyReport } from '../models/types.js';
 import { notifyPaymentProcessed, notifyTableStatusChanged } from '../sockets/socketManager.js';
@@ -21,7 +21,14 @@ export class CashierService {
     cashierUserId: string,
     payments: { method: PaymentMethod; amount: number; amount_paid?: number }[],
     includeTip: boolean = false
-  ): { success: boolean; change_given: number; message: string; receipt_file: string; receipt_text: string } {
+  ): {
+    success: boolean;
+    change_given: number;
+    service_tax_percent: number;
+    message: string;
+    receipt_file: string;
+    receipt_text: string;
+  } {
     const result = CashierRepository.processPayment(tableId, payments, cashierUserId, includeTip);
 
     const updatedTable = TableRepository.findById(tableId);
@@ -34,7 +41,8 @@ export class CashierService {
     return {
       success: true,
       change_given: result.change_given,
-      message: `Pagamento processado com sucesso. Troco a devolver: R$ ${result.change_given.toFixed(2)}. Cupom salvo em ${result.receipt_file}`,
+      service_tax_percent: result.service_tax_percent,
+      message: `Pagamento concluído. Troco: R$ ${result.change_given.toFixed(2)}. Cupom salvo em ${result.receipt_file}`,
       receipt_file: result.receipt_file,
       receipt_text: result.receipt_text
     };
@@ -46,6 +54,11 @@ export class CashierService {
 
   static generateTablePreBill(tableId: string, cashierName?: string): { filePath: string; receiptContent: string } {
     return CashierRepository.generateTablePreBill(tableId, cashierName);
+  }
+
+  /** Percentual da taxa de serviço configurado no painel administrativo. */
+  static getServiceTaxPercent(): number {
+    return getServiceTaxPercent();
   }
 
   static getDailyReport(dateStr?: string): DailyReport {

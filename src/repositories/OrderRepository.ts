@@ -67,9 +67,15 @@ export class OrderRepository {
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       WHERE oi.status IN ('PENDING', 'PREPARING') 
         AND o.status NOT IN ('CLOSED', 'CANCELLED')
-        AND mi.category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+        AND mi.category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida', 'Água e Refrigerante', 'Sucos Naturais', 'Soda Italiana', 'Caipirinha e Caipivodca', 'Cerveja', 'Vinho')
         AND mi.category NOT LIKE '%Drink%'
         AND mi.category NOT LIKE '%Bebida%'
+        AND mi.category NOT LIKE '%Refrigerante%'
+        AND mi.category NOT LIKE '%Suco%'
+        AND mi.category NOT LIKE '%Cerveja%'
+        AND mi.category NOT LIKE '%Vinho%'
+        AND mi.category NOT LIKE '%Caipir%'
+        AND mi.category NOT LIKE '%Soda%'
       ORDER BY o.created_at ASC
     `).all() as (Order & { table_number: number; waiter_name: string })[];
 
@@ -78,9 +84,15 @@ export class OrderRepository {
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       WHERE oi.order_id = ? AND oi.status IN ('PENDING', 'PREPARING', 'READY') 
-        AND mi.category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+        AND mi.category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida', 'Água e Refrigerante', 'Sucos Naturais', 'Soda Italiana', 'Caipirinha e Caipivodca', 'Cerveja', 'Vinho')
         AND mi.category NOT LIKE '%Drink%'
         AND mi.category NOT LIKE '%Bebida%'
+        AND mi.category NOT LIKE '%Refrigerante%'
+        AND mi.category NOT LIKE '%Suco%'
+        AND mi.category NOT LIKE '%Cerveja%'
+        AND mi.category NOT LIKE '%Vinho%'
+        AND mi.category NOT LIKE '%Caipir%'
+        AND mi.category NOT LIKE '%Soda%'
     `);
 
     return orders.map(order => ({
@@ -100,7 +112,17 @@ export class OrderRepository {
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       WHERE oi.status IN ('PENDING', 'PREPARING') 
         AND o.status NOT IN ('CLOSED', 'CANCELLED')
-        AND (mi.category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida') OR mi.category LIKE '%Drink%' OR mi.category LIKE '%Bebida%')
+        AND (
+          mi.category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida', 'Água e Refrigerante', 'Sucos Naturais', 'Soda Italiana', 'Caipirinha e Caipivodca', 'Cerveja', 'Vinho')
+          OR mi.category LIKE '%Drink%'
+          OR mi.category LIKE '%Bebida%'
+          OR mi.category LIKE '%Refrigerante%'
+          OR mi.category LIKE '%Suco%'
+          OR mi.category LIKE '%Cerveja%'
+          OR mi.category LIKE '%Vinho%'
+          OR mi.category LIKE '%Caipir%'
+          OR mi.category LIKE '%Soda%'
+        )
       ORDER BY o.created_at ASC
     `).all() as (Order & { table_number: number; waiter_name: string })[];
 
@@ -109,7 +131,17 @@ export class OrderRepository {
       FROM order_items oi
       JOIN menu_items mi ON mi.id = oi.menu_item_id
       WHERE oi.order_id = ? AND oi.status IN ('PENDING', 'PREPARING', 'READY') 
-        AND (mi.category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida') OR mi.category LIKE '%Drink%' OR mi.category LIKE '%Bebida%')
+        AND (
+          mi.category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida', 'Água e Refrigerante', 'Sucos Naturais', 'Soda Italiana', 'Caipirinha e Caipivodca', 'Cerveja', 'Vinho')
+          OR mi.category LIKE '%Drink%'
+          OR mi.category LIKE '%Bebida%'
+          OR mi.category LIKE '%Refrigerante%'
+          OR mi.category LIKE '%Suco%'
+          OR mi.category LIKE '%Cerveja%'
+          OR mi.category LIKE '%Vinho%'
+          OR mi.category LIKE '%Caipir%'
+          OR mi.category LIKE '%Soda%'
+        )
     `);
 
     return orders.map(order => ({
@@ -218,9 +250,15 @@ export class OrderRepository {
         SET status = ?
         WHERE order_id = ? AND menu_item_id IN (
           SELECT id FROM menu_items 
-          WHERE category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+          WHERE category NOT IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida', 'Água e Refrigerante', 'Sucos Naturais', 'Soda Italiana', 'Caipirinha e Caipivodca', 'Cerveja', 'Vinho')
             AND category NOT LIKE '%Drink%'
             AND category NOT LIKE '%Bebida%'
+            AND category NOT LIKE '%Refrigerante%'
+            AND category NOT LIKE '%Suco%'
+            AND category NOT LIKE '%Cerveja%'
+            AND category NOT LIKE '%Vinho%'
+            AND category NOT LIKE '%Caipir%'
+            AND category NOT LIKE '%Soda%'
         )
       `).run(status, orderId);
     } else if (filterType === 'DRINK' || filterType === 'BAR') {
@@ -229,9 +267,15 @@ export class OrderRepository {
         SET status = ?
         WHERE order_id = ? AND menu_item_id IN (
           SELECT id FROM menu_items 
-          WHERE category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida')
+          WHERE category IN ('Bebidas', 'Drinks do Bar', 'Drinks', 'Bar', 'Bebida', 'Água e Refrigerante', 'Sucos Naturais', 'Soda Italiana', 'Caipirinha e Caipivodca', 'Cerveja', 'Vinho')
              OR category LIKE '%Drink%'
              OR category LIKE '%Bebida%'
+             OR category LIKE '%Refrigerante%'
+             OR category LIKE '%Suco%'
+             OR category LIKE '%Cerveja%'
+             OR category LIKE '%Vinho%'
+             OR category LIKE '%Caipir%'
+             OR category LIKE '%Soda%'
         )
       `).run(status, orderId);
     } else {

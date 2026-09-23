@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, Menu } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,13 +14,24 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1366,
     height: 768,
-    fullscreen: true,
+    fullscreen: false,
     autoHideMenuBar: true,
     title: 'Central Restaurante S.A.',
     icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true
+    }
+  });
+
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.maximize();
+
+  // Permite alternar tela cheia com F11
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F11' && input.type === 'keyDown') {
+      mainWindow.setFullScreen(!mainWindow.isFullScreen());
+      event.preventDefault();
     }
   });
 
@@ -48,6 +59,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   createWindow();
 
   app.on('activate', () => {

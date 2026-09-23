@@ -2,9 +2,44 @@ import { db } from '../config/database.js';
 import { MenuItem, MenuItemIngredientDetail } from '../models/types.js';
 import { randomUUID } from 'node:crypto';
 
+const CATEGORY_ORDER = [
+  'Entradas',
+  'Petiscos',
+  'Porções',
+  'Pastéis',
+  'Carnes',
+  'Frutos do Mar',
+  'Massas',
+  'Vegetariano',
+  'Pratos Principais',
+  'Lanches',
+  'Água e Refrigerante',
+  'Bebidas',
+  'Bebida',
+  'Sucos Naturais',
+  'Soda Italiana',
+  'Cerveja',
+  'Caipirinha e Caipivodca',
+  'Drinks do Bar',
+  'Drinks',
+  'Bar',
+  'Vinho',
+  'Sobremesas',
+  'Sobremesa',
+  'Açaí'
+];
+
+function getCategoryIndex(cat: string): number {
+  const idx = CATEGORY_ORDER.indexOf(cat);
+  return idx === -1 ? 999 : idx;
+}
+
 export class MenuItemRepository {
-  static findAll(): MenuItem[] {
-    const items = db.prepare('SELECT * FROM menu_items WHERE active = 1 ORDER BY category ASC, name ASC').all() as MenuItem[];
+  static findAll(includeInactive: boolean = false): MenuItem[] {
+    const query = includeInactive
+      ? 'SELECT * FROM menu_items ORDER BY category ASC, name ASC'
+      : 'SELECT * FROM menu_items WHERE active = 1 ORDER BY category ASC, name ASC';
+    const items = db.prepare(query).all() as MenuItem[];
 
     const getIngredients = db.prepare(`
       SELECT mii.id, mii.menu_item_id, mii.inventory_id, mii.quantity_required, i.name as ingredient_name, i.unit, i.quantity as available_quantity
@@ -13,11 +48,17 @@ export class MenuItemRepository {
       WHERE mii.menu_item_id = ?
     `);
 
-    return items.map((item) => ({
+    const result = items.map((item) => ({
       ...item,
       active: Boolean(item.active),
       ingredients: getIngredients.all(item.id) as MenuItemIngredientDetail[]
     }));
+
+    return result.sort((a, b) => {
+      const diff = getCategoryIndex(a.category) - getCategoryIndex(b.category);
+      if (diff !== 0) return diff;
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
   }
 
   static findById(id: string): MenuItem | null {

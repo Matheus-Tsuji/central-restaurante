@@ -5,17 +5,17 @@ import { emitEvent } from '../sockets/socketManager.js';
 
 const router = Router();
 
-// Todas as rotas administrativas requerem autenticação
+// Todas as rotas administrativas exigem autenticação
 router.use(authenticate);
 
 // ==========================================
-// 1. MESAS (CRUD)
+// 1. MESAS
 // ==========================================
 router.post('/tables', (req, res, next) => {
   try {
     const { number, name } = req.body;
     if (!number || isNaN(Number(number))) {
-      return res.status(400).json({ error: 'Número da mesa é obrigatório e deve ser numérico.' });
+      return res.status(400).json({ error: 'Informe um número de mesa válido.' });
     }
     const table = AdminRepository.addTable(Number(number), name);
     emitEvent('tables:updated');
@@ -29,7 +29,7 @@ router.put('/tables/:id', (req, res, next) => {
   try {
     const { number, name } = req.body;
     if (!number || isNaN(Number(number))) {
-      return res.status(400).json({ error: 'Número da mesa é obrigatório.' });
+      return res.status(400).json({ error: 'Informe um número de mesa válido.' });
     }
     const table = AdminRepository.updateTable(req.params.id, Number(number), name);
     emitEvent('tables:updated');
@@ -50,19 +50,32 @@ router.delete('/tables/:id', (req, res, next) => {
 });
 
 // ==========================================
-// 2. CARDÁPIO (CRUD)
+// 2. CARDÁPIO
 // ==========================================
+router.get('/categories', (req, res, next) => {
+  try {
+    const categories = AdminRepository.getCategories();
+    res.json(categories);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/menu', (req, res, next) => {
   try {
     const { name, description, price, category } = req.body;
     if (!name || price === undefined || !category) {
       return res.status(400).json({ error: 'Nome, preço e categoria são obrigatórios.' });
     }
+    const numPrice = Number(price);
+    if (isNaN(numPrice) || numPrice < 0) {
+      return res.status(400).json({ error: 'O preço informado é inválido.' });
+    }
     const item = AdminRepository.addMenuItem({
-      name,
+      name: String(name).trim(),
       description: description || '',
-      price: Number(price),
-      category
+      price: numPrice,
+      category: String(category).trim()
     });
     emitEvent('menu:updated');
     res.status(201).json(item);
@@ -74,11 +87,18 @@ router.post('/menu', (req, res, next) => {
 router.put('/menu/:id', (req, res, next) => {
   try {
     const { name, description, price, category, active } = req.body;
+    if (!name || price === undefined || !category) {
+      return res.status(400).json({ error: 'Nome, preço e categoria são obrigatórios.' });
+    }
+    const numPrice = Number(price);
+    if (isNaN(numPrice) || numPrice < 0) {
+      return res.status(400).json({ error: 'O preço informado é inválido.' });
+    }
     const item = AdminRepository.updateMenuItem(req.params.id, {
-      name,
+      name: String(name).trim(),
       description: description || '',
-      price: Number(price),
-      category,
+      price: numPrice,
+      category: String(category).trim(),
       active
     });
     emitEvent('menu:updated');
@@ -99,7 +119,7 @@ router.delete('/menu/:id', (req, res, next) => {
 });
 
 // ==========================================
-// 3. ESTOQUE (CRUD & REPOSIÇÃO)
+// 3. ESTOQUE
 // ==========================================
 router.post('/inventory', (req, res, next) => {
   try {
@@ -142,7 +162,7 @@ router.post('/inventory/:id/restock', (req, res, next) => {
   try {
     const { quantity } = req.body;
     if (!quantity || isNaN(Number(quantity))) {
-      return res.status(400).json({ error: 'Quantidade a repor é obrigatória.' });
+      return res.status(400).json({ error: 'Informe a quantidade a repor.' });
     }
     const item = AdminRepository.restockItem(req.params.id, Number(quantity));
     emitEvent('inventory:updated');
@@ -167,8 +187,7 @@ router.delete('/inventory/:id', (req, res, next) => {
 // ==========================================
 router.get('/settings', (req, res, next) => {
   try {
-    const settings = AdminRepository.getSettings();
-    res.json(settings);
+    res.json(AdminRepository.getSettings());
   } catch (err) {
     next(err);
   }
@@ -176,8 +195,24 @@ router.get('/settings', (req, res, next) => {
 
 router.put('/settings', (req, res, next) => {
   try {
-    const updated = AdminRepository.updateSettings(req.body);
-    emitEvent('settings:updated');
+    const payload = { ...req.body };
+
+    // Validação da taxa de serviço (gorjeta): aceita 0 (desativada) até 30%.
+    if (payload.service_tax_percent !== undefined) {
+      const pct = Number(String(payload.service_tax_percent).replace(',', '.'));
+      if (!isFinite(pct) || pct < 0 || pct > 30) {
+        return res.status(400).json({ error: 'A taxa de serviço deve ser um número entre 0 e 30.' });
+      }
+      payload.service_tax_percent = Number(pct.toFixed(2));
+    }
+
+    // Dinheiro é obrigatório por lei e não pode ser desativado.
+    if (Array.isArray(payload.payment_methods_allowed) && !payload.payment_methods_allowed.includes('CASH')) {
+      payload.payment_methods_allowed = ['CASH', ...payload.payment_methods_allowed];
+    }
+
+    const updated = AdminRepository.updateSettings(payload);
+    emitEvent('settings:updated', updated);
     res.json(updated);
   } catch (err) {
     next(err);
@@ -185,7 +220,7 @@ router.put('/settings', (req, res, next) => {
 });
 
 // ==========================================
-// 5. ALTERAR CREDENCIAIS DO ADMIN
+// 5. CREDENCIAIS DO ADMINISTRADOR
 // ==========================================
 router.post('/change-credentials', (req: any, res, next) => {
   try {
@@ -195,7 +230,7 @@ router.post('/change-credentials', (req: any, res, next) => {
     }
     const { currentPassword, newUsername, newPassword } = req.body;
     AdminRepository.changeAdminCredentials(userId, { currentPassword, newUsername, newPassword });
-    res.json({ success: true, message: 'Credenciais de Administrador alteradas com sucesso!' });
+    res.json({ success: true, message: 'Usuário e senha alterados com sucesso.' });
   } catch (err) {
     next(err);
   }
